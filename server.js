@@ -11,7 +11,7 @@ import reponsesRoutes from "./routes/reponses.js";
 import avisRoutes from "./routes/avis.js";
 import parrainageRoutes from "./routes/parrainage.js";
 import categoriesRoutes from "./routes/categories.js";
-import adminSetupRoutes from "./routes/admin-setup.js"; // ⚠️ TEMPORAIRE — à retirer après usage
+import adminStatsRoutes from "./routes/admin-stats.js";
 
 dotenv.config();
 const app = express();
@@ -29,8 +29,7 @@ app.use("/api/reponses", reponsesRoutes);
 app.use("/api/avis", avisRoutes);
 app.use("/api/parrainage", parrainageRoutes);
 app.use("/api/categories", categoriesRoutes);
-app.use("/api/admin-setup", adminSetupRoutes); // ⚠️ TEMPORAIRE — à retirer après usage
+app.use("/api/admin-stats", adminStatsRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Serveur TonaBk lancé sur le port ${PORT}`));
-  
