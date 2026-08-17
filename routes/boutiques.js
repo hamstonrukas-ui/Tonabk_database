@@ -36,6 +36,17 @@ router.get("/", async (req, res) => {
   res.json(data);
 });
 
+// Boutiques de l'utilisateur connecté
+router.get("/mine", verifyAuth, async (req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from("boutiques")
+    .select("*, categories(nom, icone)")
+    .eq("owner_id", req.user.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
 // Voir une boutique précise
 router.get("/:id", async (req, res) => {
   const { data, error } = await supabaseAdmin
@@ -204,3 +215,4 @@ router.put("/admin/:id/retirer-certification", verifyAuth, async (req, res) => {
 });
 
 export default router;
+
