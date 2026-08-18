@@ -9,6 +9,16 @@ function estAdmin(req) {
 
 // Créer une boutique
 router.post("/", verifyAuth, async (req, res) => {
+  // Un compte ne peut créer qu'une seule boutique
+  const { data: existantes } = await supabaseAdmin
+    .from("boutiques")
+    .select("id")
+    .eq("owner_id", req.user.id);
+
+  if (existantes && existantes.length > 0) {
+    return res.status(409).json({ error: "Vous avez déjà une boutique. Un seul compte ne peut créer qu'une boutique." });
+  }
+
   const { nom, categorie_id, description, telephone, quartier } = req.body;
 
   const { data, error } = await supabaseAdmin
@@ -215,4 +225,3 @@ router.put("/admin/:id/retirer-certification", verifyAuth, async (req, res) => {
 });
 
 export default router;
-
