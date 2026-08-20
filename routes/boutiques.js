@@ -117,12 +117,96 @@ router.post("/:id/annonces", verifyAuth, async (req, res) => {
   res.status(201).json(data);
 });
 
+// Vérifier si l'utilisateur connecté est abonné à cette boutique
+router.get("/:id/est-abonne", verifyAuth, async (req, res) => {
+  const { data } = await supabaseAdmin
+    .from("abonnes")
+    .select("id")
+    .eq("boutique_id", req.params.id)
+    .eq("utilisateur_id", req.user.id)
+    .maybeSingle();
+
+  res.json({ abonne: !!data });
+});
+
+// Propriétaire : liste des abonnés (comptes + contacts manuels) avec téléphone
+router.get("/:id/abonnes", verifyAuth, async (req, res) => {
+  const { data: boutique } = await supabaseAdmin.from("boutiques").select("owner_id").eq("id", req.params.id).single();
+  if (!boutique || boutique.owner_id !== req.user.id) {
+    return res.status(403).json({ error: "Non autorisé" });
+  }
+
+  const { data: abonnes } = await supabaseAdmin
+    .from("abonnes")
+    .select("utilisateur_id")
+    .eq("boutique_id", req.params.id);
+
+  const resultats = [];
+  for (const a of abonnes || []) {
+    const { data } = await supabaseAdmin.auth.admin.getUserById(a.utilisateur_id);
+    const telephone = data?.user?.user_metadata?.telephone;
+    if (telephone) resultats.push({ id: a.utilisateur_id, telephone, source: "compte" });
+  }
+
+  const { data: contacts } = await supabaseAdmin
+    .from("contacts_boutique")
+    .select("*")
+    .eq("boutique_id", req.params.id);
+
+  for (const c of contacts || []) {
+    resultats.push({ id: c.id, nom: c.nom, telephone: c.telephone, source: "manuel" });
+  }
+
+  res.json(resultats);
+});
+
+// Propriétaire : ajouter un contact manuellement (ami sans compte)
+router.post("/:id/contacts", verifyAuth, async (req, res) => {
+  const { data: boutique } = await supabaseAdmin.from("boutiques").select("owner_id").eq("id", req.params.id).single();
+  if (!boutique || boutique.owner_id !== req.user.id) {
+    return res.status(403).json({ error: "Non autorisé" });
+  }
+
+  const { nom, telephone } = req.body;
+  if (!telephone) return res.status(400).json({ error: "Numéro de téléphone requis" });
+
+  const { data, error } = await supabaseAdmin
+    .from("contacts_boutique")
+    .insert({ boutique_id: req.params.id, nom: nom || null, telephone })
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(201).json(data);
+});
+
+// Propriétaire : retirer un contact manuel
+router.delete("/:id/contacts/:contactId", verifyAuth, async (req, res) => {
+  const { data: boutique } = await supabaseAdmin.from("boutiques").select("owner_id").eq("id", req.params.id).single();
+  if (!boutique || boutique.owner_id !== req.user.id) {
+    return res.status(403).json({ error: "Non autorisé" });
+  }
+
+  await supabaseAdmin.from("contacts_boutique").delete().eq("id", req.params.contactId);
+  res.json({ ok: true });
+});
+
 router.post("/:id/abonner", verifyAuth, async (req, res) => {
   const { error } = await supabaseAdmin
     .from("abonnes")
     .insert({ boutique_id: req.params.id, utilisateur_id: req.user.id });
 
   if (error && error.code !== "23505") return res.status(500).json({ error: error.message });
+  res.json({ ok: true });
+});
+
+router.delete("/:id/abonner", verifyAuth, async (req, res) => {
+  await supabaseAdmin
+    .from("abonnes")
+    .delete()
+    .eq("boutique_id", req.params.id)
+    .eq("utilisateur_id", req.user.id);
+
   res.json({ ok: true });
 });
 
@@ -225,3 +309,4 @@ router.put("/admin/:id/retirer-certification", verifyAuth, async (req, res) => {
 });
 
 export default router;
+    
