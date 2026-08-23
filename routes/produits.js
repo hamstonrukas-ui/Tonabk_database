@@ -10,14 +10,14 @@ async function verifierProprietaireBoutique(boutiqueId, userId) {
 
 // Ajouter un produit
 router.post("/", verifyAuth, async (req, res) => {
-  const { boutique_id, nom, prix, stock, description, photo_url, photo_thumb_url } = req.body;
+  const { boutique_id, nom, prix, devise, stock, description, photo_url, photo_thumb_url } = req.body;
 
   const autorise = await verifierProprietaireBoutique(boutique_id, req.user.id);
   if (!autorise) return res.status(403).json({ error: "Non autorisé sur cette boutique" });
 
   const { data, error } = await supabaseAdmin
     .from("produits")
-    .insert({ boutique_id, nom, prix, stock, description, photo_url, photo_thumb_url })
+    .insert({ boutique_id, nom, prix, devise: devise || "USD", stock, description, photo_url, photo_thumb_url })
     .select()
     .single();
 
@@ -68,10 +68,10 @@ router.put("/:id", verifyAuth, async (req, res) => {
   const autorise = await verifierProprietaireBoutique(produit.boutique_id, req.user.id);
   if (!autorise) return res.status(403).json({ error: "Non autorisé" });
 
-  const { nom, prix, stock, description } = req.body;
+  const { nom, prix, devise, stock, description } = req.body;
   const { data, error } = await supabaseAdmin
     .from("produits")
-    .update({ nom, prix, stock, description })
+    .update({ nom, prix, devise, stock, description })
     .eq("id", req.params.id)
     .select()
     .single();
@@ -116,3 +116,4 @@ router.put("/admin/:id/sponsoriser", verifyAuth, async (req, res) => {
 });
 
 export default router;
+  
