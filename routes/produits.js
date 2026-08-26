@@ -36,8 +36,25 @@ router.get("/", async (req, res) => {
   res.json(data);
 });
 
-// Accueil : produits sponsorisés en premier, reste mélangé aléatoirement
+// --- Ordre "aléatoire" mais stable pour la journée (nécessaire pour une pagination cohérente) ---
+function seedDuJour() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function hash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = (h << 5) - h + str.charCodeAt(i);
+    h |= 0;
+  }
+  return h;
+}
+
+// Accueil : produits sponsorisés en premier, reste mélangé (stable sur la journée), paginé
 router.get("/accueil", async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.max(1, parseInt(req.query.limit) || 10);
   const maintenant = new Date().toISOString();
 
   const { data: sponsorises } = await supabaseAdmin
@@ -46,18 +63,27 @@ router.get("/accueil", async (req, res) => {
     .eq("sponsorise", true)
     .gt("sponsorise_jusqua", maintenant);
 
-  const { data: normaux } = await supabaseAdmin
+  const { data: normauxBruts } = await supabaseAdmin
     .from("produits")
     .select("*, boutiques(nom, certifiee)")
     .or(`sponsorise.eq.false,sponsorise_jusqua.lt.${maintenant}`);
 
-  const melanges = [...(normaux || [])];
-  for (let i = melanges.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [melanges[i], melanges[j]] = [melanges[j], melanges[i]];
-  }
+  const seed = seedDuJour();
+  const normaux = [...(normauxBruts || [])].sort(
+    (a, b) => hash(a.id + seed) - hash(b.id + seed)
+  );
 
-  res.json([...(sponsorises || []), ...melanges]);
+  const combinee = [...(sponsorises || []), ...normaux];
+  const total = combinee.length;
+  const offset = (page - 1) * limit;
+  const pageItems = combinee.slice(offset, offset + limit);
+
+  res.json({
+    data: pageItems,
+    total,
+    page,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+  });
 });
 
 // Modifier un produit
@@ -116,4 +142,3 @@ router.put("/admin/:id/sponsoriser", verifyAuth, async (req, res) => {
 });
 
 export default router;
-  
