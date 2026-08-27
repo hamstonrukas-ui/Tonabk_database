@@ -7,9 +7,8 @@ function estAdmin(req) {
   return req.user.app_metadata?.role === "admin" || req.user.user_metadata?.role === "admin";
 }
 
-// Créer une boutique
+// Créer une boutique — active immédiatement, en attente de revue admin (pas de blocage public)
 router.post("/", verifyAuth, async (req, res) => {
-  // Un compte ne peut créer qu'une seule boutique
   const { data: existantes } = await supabaseAdmin
     .from("boutiques")
     .select("id")
@@ -26,24 +25,14 @@ router.post("/", verifyAuth, async (req, res) => {
     .insert({
       owner_id: req.user.id,
       nom, categorie_id, description, telephone, quartier,
-      statut: "en_attente",
+      statut: "actif",
+      revue_admin: false,
     })
     .select()
     .single();
 
   if (error) return res.status(500).json({ error: error.message });
   res.status(201).json(data);
-});
-
-// Lister les boutiques actives
-router.get("/", async (req, res) => {
-  const { categorie_id } = req.query;
-  let query = supabaseAdmin.from("boutiques").select("*, categories(nom, icone)").eq("statut", "actif");
-  if (categorie_id) query = query.eq("categorie_id", categorie_id);
-
-  const { data, error } = await query;
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
 });
 
 // Boutiques de l'utilisateur connecté
@@ -53,6 +42,17 @@ router.get("/mine", verifyAuth, async (req, res) => {
     .select("*, categories(nom, icone)")
     .eq("owner_id", req.user.id);
 
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// Lister les boutiques actives
+router.get("/", async (req, res) => {
+  const { categorie_id } = req.query;
+  let query = supabaseAdmin.from("boutiques").select("*, categories(nom, icone)").eq("statut", "actif");
+  if (categorie_id) query = query.eq("categorie_id", categorie_id);
+
+  const { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
 });
@@ -71,9 +71,7 @@ router.get("/:id", async (req, res) => {
 
 // Modifier sa boutique
 router.put("/:id", verifyAuth, async (req, res) => {
-  const { data: boutique } = await supabaseAdmin
-    .from("boutiques").select("owner_id").eq("id", req.params.id).single();
-
+  const { data: boutique } = await supabaseAdmin.from("boutiques").select("owner_id").eq("id", req.params.id).single();
   if (!boutique || boutique.owner_id !== req.user.id) {
     return res.status(403).json({ error: "Non autorisé" });
   }
@@ -117,7 +115,7 @@ router.post("/:id/annonces", verifyAuth, async (req, res) => {
   res.status(201).json(data);
 });
 
-// Vérifier si l'utilisateur connecté est abonné à cette boutique
+// --- Abonnements ---
 router.get("/:id/est-abonne", verifyAuth, async (req, res) => {
   const { data } = await supabaseAdmin
     .from("abonnes")
@@ -129,7 +127,6 @@ router.get("/:id/est-abonne", verifyAuth, async (req, res) => {
   res.json({ abonne: !!data });
 });
 
-// Propriétaire : liste des abonnés (comptes + contacts manuels) avec téléphone
 router.get("/:id/abonnes", verifyAuth, async (req, res) => {
   const { data: boutique } = await supabaseAdmin.from("boutiques").select("owner_id").eq("id", req.params.id).single();
   if (!boutique || boutique.owner_id !== req.user.id) {
@@ -160,7 +157,6 @@ router.get("/:id/abonnes", verifyAuth, async (req, res) => {
   res.json(resultats);
 });
 
-// Propriétaire : ajouter un contact manuellement (ami sans compte)
 router.post("/:id/contacts", verifyAuth, async (req, res) => {
   const { data: boutique } = await supabaseAdmin.from("boutiques").select("owner_id").eq("id", req.params.id).single();
   if (!boutique || boutique.owner_id !== req.user.id) {
@@ -180,7 +176,6 @@ router.post("/:id/contacts", verifyAuth, async (req, res) => {
   res.status(201).json(data);
 });
 
-// Propriétaire : retirer un contact manuel
 router.delete("/:id/contacts/:contactId", verifyAuth, async (req, res) => {
   const { data: boutique } = await supabaseAdmin.from("boutiques").select("owner_id").eq("id", req.params.id).single();
   if (!boutique || boutique.owner_id !== req.user.id) {
@@ -212,26 +207,27 @@ router.delete("/:id/abonner", verifyAuth, async (req, res) => {
 
 // --- Routes ADMIN ---
 
-// Boutiques en attente de validation
-router.get("/admin/en-attente", verifyAuth, async (req, res) => {
+// Boutiques pas encore examinées par l'admin (toujours actives publiquement entre-temps)
+router.get("/admin/nouvelles", verifyAuth, async (req, res) => {
   if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
 
   const { data, error } = await supabaseAdmin
     .from("boutiques")
     .select("*, categories(nom)")
-    .eq("statut", "en_attente");
+    .eq("revue_admin", false)
+    .order("created_at", { ascending: false });
 
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
 });
 
-// Approuver une boutique
-router.put("/admin/:id/approuver", verifyAuth, async (req, res) => {
+// Marquer une boutique comme examinée (n'affecte pas sa visibilité publique)
+router.put("/admin/:id/marquer-vue", verifyAuth, async (req, res) => {
   if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
 
   const { data, error } = await supabaseAdmin
     .from("boutiques")
-    .update({ statut: "actif" })
+    .update({ revue_admin: true })
     .eq("id", req.params.id)
     .select()
     .single();
@@ -240,7 +236,6 @@ router.put("/admin/:id/approuver", verifyAuth, async (req, res) => {
   res.json(data);
 });
 
-// Suspendre une boutique
 router.put("/admin/:id/suspendre", verifyAuth, async (req, res) => {
   if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
 
@@ -255,7 +250,20 @@ router.put("/admin/:id/suspendre", verifyAuth, async (req, res) => {
   res.json(data);
 });
 
-// Supprimer une boutique définitivement
+router.put("/admin/:id/reactiver", verifyAuth, async (req, res) => {
+  if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
+
+  const { data, error } = await supabaseAdmin
+    .from("boutiques")
+    .update({ statut: "actif" })
+    .eq("id", req.params.id)
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
 router.delete("/admin/:id", verifyAuth, async (req, res) => {
   if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
 
@@ -266,7 +274,6 @@ router.delete("/admin/:id", verifyAuth, async (req, res) => {
   res.status(204).send();
 });
 
-// Supprimer un produit précis (modération)
 router.delete("/admin/produits/:id", verifyAuth, async (req, res) => {
   if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
 
@@ -275,7 +282,6 @@ router.delete("/admin/produits/:id", verifyAuth, async (req, res) => {
   res.status(204).send();
 });
 
-// Certifier une boutique (badge "Boutique certifiée", payant)
 router.put("/admin/:id/certifier", verifyAuth, async (req, res) => {
   if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
 
@@ -293,7 +299,6 @@ router.put("/admin/:id/certifier", verifyAuth, async (req, res) => {
   res.json(data);
 });
 
-// Retirer la certification
 router.put("/admin/:id/retirer-certification", verifyAuth, async (req, res) => {
   if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
 
@@ -309,4 +314,3 @@ router.put("/admin/:id/retirer-certification", verifyAuth, async (req, res) => {
 });
 
 export default router;
-    
