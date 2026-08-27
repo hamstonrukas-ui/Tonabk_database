@@ -1,4 +1,4 @@
-import express from "express";
+  import express from "express";
 import { verifyAuth, supabaseAdmin } from "../middleware/verifyAuth.js";
 
 const router = express.Router();
@@ -66,7 +66,7 @@ router.get("/accueil", async (req, res) => {
   const { data: normauxBruts } = await supabaseAdmin
     .from("produits")
     .select("*, boutiques(nom, certifiee)")
-    .or(`sponsorise.eq.false,sponsorise_jusqua.lt.${maintenant}`);
+    .or(`sponsorise.eq.false,sponsorise.is.null,sponsorise_jusqua.lt.${maintenant}`);
 
   const seed = seedDuJour();
   const normaux = [...(normauxBruts || [])].sort(
@@ -142,3 +142,4 @@ router.put("/admin/:id/sponsoriser", verifyAuth, async (req, res) => {
 });
 
 export default router;
+  
