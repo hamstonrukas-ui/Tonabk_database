@@ -205,6 +205,59 @@ router.delete("/:id/abonner", verifyAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// --- Journal privé du vendeur (notes personnelles) ---
+router.get("/:id/notes", verifyAuth, async (req, res) => {
+  const { data: boutique } = await supabaseAdmin.from("boutiques").select("owner_id").eq("id", req.params.id).single();
+  if (!boutique || boutique.owner_id !== req.user.id) {
+    return res.status(403).json({ error: "Non autorisé" });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("notes_boutique")
+    .select("*")
+    .eq("boutique_id", req.params.id)
+    .order("created_at", { ascending: false });
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+router.post("/:id/notes", verifyAuth, async (req, res) => {
+  const { data: boutique } = await supabaseAdmin.from("boutiques").select("owner_id").eq("id", req.params.id).single();
+  if (!boutique || boutique.owner_id !== req.user.id) {
+    return res.status(403).json({ error: "Non autorisé" });
+  }
+
+  const { texte } = req.body;
+  if (!texte || !texte.trim()) return res.status(400).json({ error: "Le texte ne peut pas être vide" });
+
+  const { data, error } = await supabaseAdmin
+    .from("notes_boutique")
+    .insert({ boutique_id: req.params.id, texte: texte.trim() })
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(201).json(data);
+});
+
+router.delete("/notes/:noteId", verifyAuth, async (req, res) => {
+  const { data: note } = await supabaseAdmin
+    .from("notes_boutique")
+    .select("boutique_id")
+    .eq("id", req.params.noteId)
+    .single();
+  if (!note) return res.status(404).json({ error: "Note introuvable" });
+
+  const { data: boutique } = await supabaseAdmin.from("boutiques").select("owner_id").eq("id", note.boutique_id).single();
+  if (!boutique || boutique.owner_id !== req.user.id) {
+    return res.status(403).json({ error: "Non autorisé" });
+  }
+
+  await supabaseAdmin.from("notes_boutique").delete().eq("id", req.params.noteId);
+  res.status(204).send();
+});
+
 // --- Routes ADMIN ---
 
 // Boutiques pas encore examinées par l'admin (toujours actives publiquement entre-temps)
