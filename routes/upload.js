@@ -66,7 +66,7 @@ router.post("/photo", verifyAuth, upload.single("photo"), async (req, res) => {
   }
 });
 
-// Upload de la photo de profil (logo) d'une boutique — ne compte pas dans le quota de photos produits
+// Upload de la photo de profil (logo) d'une boutique — stocké sur Supabase Storage (pas sur R2), et ne compte pas dans le quota de photos produits
 router.post("/photo-boutique-logo", verifyAuth, upload.single("photo"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "Aucune photo reçue" });
@@ -84,21 +84,27 @@ router.post("/photo-boutique-logo", verifyAuth, upload.single("photo"), async (r
     }
 
     const extension = req.file.mimetype === "image/png" ? "png" : "jpg";
-    const key = `boutiques/${boutiqueId}/logo/${randomUUID()}.${extension}`;
+    const chemin = `${boutiqueId}/${randomUUID()}.${extension}`;
 
-    await r2.send(
-      new PutObjectCommand({
-        Bucket: process.env.R2_BUCKET_NAME,
-        Key: key,
-        Body: req.file.buffer,
-        ContentType: req.file.mimetype,
-      })
-    );
+    const { error: erreurUpload } = await supabaseAdmin.storage
+      .from("logos-boutiques")
+      .upload(chemin, req.file.buffer, {
+        contentType: req.file.mimetype,
+        upsert: false,
+      });
 
-    const url = `${process.env.R2_PUBLIC_URL}/${key}`;
-    res.json({ url });
+    if (erreurUpload) {
+      console.error("Erreur upload Supabase Storage :", erreurUpload);
+      return res.status(500).json({ error: "Échec de l'upload de la photo" });
+    }
+
+    const { data: urlPublique } = supabaseAdmin.storage
+      .from("logos-boutiques")
+      .getPublicUrl(chemin);
+
+    res.json({ url: urlPublique.publicUrl });
   } catch (error) {
-    console.error("Erreur upload R2 :", error);
+    console.error("Erreur upload logo boutique :", error);
     res.status(500).json({ error: "Échec de l'upload de la photo" });
   }
 });
@@ -131,4 +137,4 @@ router.post("/photo-maison", verifyAuth, upload.single("photo"), async (req, res
 
 export default router;
 
-                  
+        
