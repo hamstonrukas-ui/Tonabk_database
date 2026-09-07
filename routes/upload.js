@@ -66,6 +66,43 @@ router.post("/photo", verifyAuth, upload.single("photo"), async (req, res) => {
   }
 });
 
+// Upload de la photo de profil (logo) d'une boutique — ne compte pas dans le quota de photos produits
+router.post("/photo-boutique-logo", verifyAuth, upload.single("photo"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "Aucune photo reçue" });
+
+    const boutiqueId = req.body.boutiqueId;
+
+    const { data: boutique } = await supabaseAdmin
+      .from("boutiques")
+      .select("owner_id")
+      .eq("id", boutiqueId)
+      .single();
+
+    if (!boutique || boutique.owner_id !== req.user.id) {
+      return res.status(403).json({ error: "Non autorisé sur cette boutique" });
+    }
+
+    const extension = req.file.mimetype === "image/png" ? "png" : "jpg";
+    const key = `boutiques/${boutiqueId}/logo/${randomUUID()}.${extension}`;
+
+    await r2.send(
+      new PutObjectCommand({
+        Bucket: process.env.R2_BUCKET_NAME,
+        Key: key,
+        Body: req.file.buffer,
+        ContentType: req.file.mimetype,
+      })
+    );
+
+    const url = `${process.env.R2_PUBLIC_URL}/${key}`;
+    res.json({ url });
+  } catch (error) {
+    console.error("Erreur upload R2 :", error);
+    res.status(500).json({ error: "Échec de l'upload de la photo" });
+  }
+});
+
 // Upload d'une photo de maison
 router.post("/photo-maison", verifyAuth, upload.single("photo"), async (req, res) => {
   try {
@@ -93,4 +130,5 @@ router.post("/photo-maison", verifyAuth, upload.single("photo"), async (req, res
 });
 
 export default router;
-        
+
+                  
