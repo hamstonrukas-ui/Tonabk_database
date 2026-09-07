@@ -28,7 +28,7 @@ router.post("/", verifyAuth, async (req, res) => {
 // Lister les produits (filtre boutique optionnel)
 router.get("/", async (req, res) => {
   const { boutique_id } = req.query;
-  let query = supabaseAdmin.from("produits").select("*, boutiques(nom, certifiee)");
+  let query = supabaseAdmin.from("produits").select("*, boutiques(nom, certifiee, telephone)");
   if (boutique_id) query = query.eq("boutique_id", boutique_id);
 
   const { data, error } = await query;
@@ -59,13 +59,13 @@ router.get("/accueil", async (req, res) => {
 
   const { data: sponsorises } = await supabaseAdmin
     .from("produits")
-    .select("*, boutiques(nom, certifiee)")
+    .select("*, boutiques(nom, certifiee, telephone)")
     .eq("sponsorise", true)
     .gt("sponsorise_jusqua", maintenant);
 
   const { data: normauxBruts } = await supabaseAdmin
     .from("produits")
-    .select("*, boutiques(nom, certifiee)")
+    .select("*, boutiques(nom, certifiee, telephone)")
     .or(`sponsorise.eq.false,sponsorise.is.null,sponsorise_jusqua.lt.${maintenant}`);
 
   const seed = seedDuJour();
@@ -142,4 +142,4 @@ router.put("/admin/:id/sponsoriser", verifyAuth, async (req, res) => {
 });
 
 export default router;
-  
+
