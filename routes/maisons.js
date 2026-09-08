@@ -9,20 +9,35 @@ function estAdmin(req) {
 
 // Publier une maison
 router.post("/", verifyAuth, async (req, res) => {
-  const { titre, type_bien, quartier, commune, prix, devise, nb_chambres, nb_salles_bain, description, telephone } = req.body;
+  const { titre, type_bien, ville, quartier, commune, prix, devise, nb_chambres, nb_salles_bain, description, telephone } = req.body;
+  const admin = estAdmin(req);
 
   const { data, error } = await supabaseAdmin
     .from("maisons")
     .insert({
       publie_par: req.user.id,
-      titre, type_bien, quartier, commune, prix, devise,
+      titre, type_bien, ville, quartier, commune, prix, devise,
       nb_chambres, nb_salles_bain, description, telephone,
+      est_commission: !admin,
+      commissionnaire_id: admin ? null : req.user.id,
     })
     .select()
     .single();
 
   if (error) return res.status(500).json({ error: error.message });
   res.status(201).json(data);
+});
+
+// Mes maisons publiées (tous statuts) — pour le tableau de bord personnel
+router.get("/mine", verifyAuth, async (req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from("maisons")
+    .select("*, photos_maisons(url, ordre)")
+    .eq("publie_par", req.user.id)
+    .order("created_at", { ascending: false });
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
 });
 
 // Lister les maisons disponibles
@@ -88,6 +103,13 @@ router.post("/:id/photos", verifyAuth, async (req, res) => {
   const { data: maison } = await supabaseAdmin.from("maisons").select("publie_par").eq("id", req.params.id).single();
   if (!maison || maison.publie_par !== req.user.id) return res.status(403).json({ error: "Non autorisé" });
 
+  const { count } = await supabaseAdmin
+    .from("photos_maisons")
+    .select("id", { count: "exact", head: true })
+    .eq("maison_id", req.params.id);
+
+  if (count >= 3) return res.status(400).json({ error: "Maximum 3 photos par annonce" });
+
   const { data, error } = await supabaseAdmin
     .from("photos_maisons")
     .insert({ maison_id: req.params.id, url, ordre: ordre || 0 })
@@ -130,3 +152,4 @@ router.delete("/admin/photos/:photoId", verifyAuth, async (req, res) => {
 });
 
 export default router;
+           
