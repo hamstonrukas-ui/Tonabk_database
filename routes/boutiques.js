@@ -19,13 +19,13 @@ router.post("/", verifyAuth, async (req, res) => {
     return res.status(409).json({ error: "Vous avez déjà une boutique. Un seul compte ne peut créer qu'une boutique." });
   }
 
-  const { nom, categorie_id, description, telephone, quartier } = req.body;
+  const { nom, categorie_id, description, telephone, ville, commune, quartier } = req.body;
 
   const { data, error } = await supabaseAdmin
     .from("boutiques")
     .insert({
       owner_id: req.user.id,
-      nom, categorie_id, description, telephone, quartier,
+      nom, categorie_id, description, telephone, ville, commune, quartier,
       statut: "actif",
       revue_admin: false,
     })
@@ -77,10 +77,10 @@ router.put("/:id", verifyAuth, async (req, res) => {
     return res.status(403).json({ error: "Non autorisé" });
   }
 
-  const { nom, description, telephone, quartier, logo_url } = req.body;
+  const { nom, description, telephone, ville, commune, quartier, logo_url } = req.body;
   const { data, error } = await supabaseAdmin
     .from("boutiques")
-    .update({ nom, description, telephone, quartier, logo_url })
+    .update({ nom, description, telephone, ville, commune, quartier, logo_url })
     .eq("id", req.params.id)
     .select()
     .single();
