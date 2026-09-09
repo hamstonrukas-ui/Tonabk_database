@@ -7,6 +7,20 @@ function estAdmin(req) {
   return req.user.app_metadata?.role === "admin" || req.user.user_metadata?.role === "admin";
 }
 
+// Ajoute nom_agence à chaque maison, à partir du profil du commissionnaire qui l'a publiée
+async function attacherNomsAgences(maisons) {
+  const idsCommissionnaires = [...new Set(maisons.filter((m) => m.commissionnaire_id).map((m) => m.commissionnaire_id))];
+  if (idsCommissionnaires.length === 0) return maisons;
+
+  const { data: profils } = await supabaseAdmin
+    .from("profils_commissionnaires")
+    .select("user_id, nom_agence")
+    .in("user_id", idsCommissionnaires);
+
+  const nomParUserId = Object.fromEntries((profils || []).map((p) => [p.user_id, p.nom_agence]));
+  return maisons.map((m) => ({ ...m, nom_agence: m.commissionnaire_id ? nomParUserId[m.commissionnaire_id] || null : null }));
+}
+
 // Publier une maison
 router.post("/", verifyAuth, async (req, res) => {
   const { titre, type_bien, ville, quartier, commune, prix, devise, nb_chambres, nb_salles_bain, description, telephone } = req.body;
@@ -50,7 +64,7 @@ router.get("/", async (req, res) => {
 
   const { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+  res.json(await attacherNomsAgences(data));
 });
 
 // Voir une maison précise
@@ -62,7 +76,8 @@ router.get("/:id", async (req, res) => {
     .single();
 
   if (error) return res.status(404).json({ error: "Maison introuvable" });
-  res.json(data);
+  const [avecAgence] = await attacherNomsAgences([data]);
+  res.json(avecAgence);
 });
 
 // Modifier sa maison
@@ -152,4 +167,5 @@ router.delete("/admin/photos/:photoId", verifyAuth, async (req, res) => {
 });
 
 export default router;
+  
            
