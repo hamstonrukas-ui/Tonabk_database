@@ -21,10 +21,25 @@ async function attacherNomsAgences(maisons) {
   return maisons.map((m) => ({ ...m, nom_agence: m.commissionnaire_id ? nomParUserId[m.commissionnaire_id] || null : null }));
 }
 
+const MAX_ANNONCES_PAR_AGENCE = 10;
+
 // Publier une maison
 router.post("/", verifyAuth, async (req, res) => {
   const { titre, type_bien, ville, quartier, commune, prix, devise, nb_chambres, nb_salles_bain, description, telephone } = req.body;
   const admin = estAdmin(req);
+
+  if (!admin) {
+    const { count } = await supabaseAdmin
+      .from("maisons")
+      .select("id", { count: "exact", head: true })
+      .eq("commissionnaire_id", req.user.id);
+
+    if (count >= MAX_ANNONCES_PAR_AGENCE) {
+      return res.status(400).json({
+        error: `Vous avez atteint la limite de ${MAX_ANNONCES_PAR_AGENCE} annonces par agence. Supprimez ou suspendez une annonce existante pour en publier une nouvelle.`,
+      });
+    }
+  }
 
   const { data, error } = await supabaseAdmin
     .from("maisons")
@@ -167,5 +182,4 @@ router.delete("/admin/photos/:photoId", verifyAuth, async (req, res) => {
 });
 
 export default router;
-  
-           
+        
