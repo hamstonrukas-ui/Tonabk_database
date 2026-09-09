@@ -5,6 +5,7 @@ import uploadRoutes from "./routes/upload.js";
 import boutiquesRoutes from "./routes/boutiques.js";
 import produitsRoutes from "./routes/produits.js";
 import maisonsRoutes from "./routes/maisons.js";
+import commissionnairesRoutes from "./routes/commissionnaires.js";
 import favorisRoutes from "./routes/favoris.js";
 import requetesRoutes from "./routes/requetes.js";
 import reponsesRoutes from "./routes/reponses.js";
@@ -23,6 +24,7 @@ app.use("/api/upload", uploadRoutes);
 app.use("/api/boutiques", boutiquesRoutes);
 app.use("/api/produits", produitsRoutes);
 app.use("/api/maisons", maisonsRoutes);
+app.use("/api/commissionnaires", commissionnairesRoutes);
 app.use("/api/favoris", favorisRoutes);
 app.use("/api/requetes", requetesRoutes);
 app.use("/api/reponses", reponsesRoutes);
@@ -33,3 +35,4 @@ app.use("/api/admin-stats", adminStatsRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Serveur TonaBk lancé sur le port ${PORT}`));
+        
