@@ -115,6 +115,17 @@ router.post("/photo-maison", verifyAuth, upload.single("photo"), async (req, res
     if (!req.file) return res.status(400).json({ error: "Aucune photo reçue" });
 
     const maisonId = req.body.maisonId;
+
+    const { data: maison } = await supabaseAdmin
+      .from("maisons")
+      .select("publie_par")
+      .eq("id", maisonId)
+      .single();
+
+    if (!maison || maison.publie_par !== req.user.id) {
+      return res.status(403).json({ error: "Non autorisé sur cette annonce" });
+    }
+
     const extension = req.file.mimetype === "image/png" ? "png" : "jpg";
     const key = `maisons/${maisonId}/${randomUUID()}.${extension}`;
 
@@ -137,4 +148,4 @@ router.post("/photo-maison", verifyAuth, upload.single("photo"), async (req, res
 
 export default router;
 
-        
+    
