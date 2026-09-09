@@ -21,16 +21,36 @@ router.put("/mon-profil", verifyAuth, async (req, res) => {
   if (!nom_agence || !nom_agence.trim()) {
     return res.status(400).json({ error: "Le nom de l'agence est requis" });
   }
+  if (!telephone || !telephone.trim()) {
+    return res.status(400).json({ error: "Le numéro de téléphone de l'agence est requis" });
+  }
+
+  const telephonePropre = telephone.trim();
+
+  // Un numéro = une seule agence : on vérifie qu'aucune AUTRE agence ne l'utilise déjà
+  const { data: dejaUtilise } = await supabaseAdmin
+    .from("profils_commissionnaires")
+    .select("user_id")
+    .eq("telephone", telephonePropre)
+    .neq("user_id", req.user.id)
+    .maybeSingle();
+
+  if (dejaUtilise) {
+    return res.status(409).json({ error: "Ce numéro est déjà utilisé par une autre agence." });
+  }
 
   const { data, error } = await supabaseAdmin
     .from("profils_commissionnaires")
-    .upsert({ user_id: req.user.id, nom_agence: nom_agence.trim(), telephone }, { onConflict: "user_id" })
+    .upsert({ user_id: req.user.id, nom_agence: nom_agence.trim(), telephone: telephonePropre }, { onConflict: "user_id" })
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    if (error.code === "23505") return res.status(409).json({ error: "Ce numéro est déjà utilisé par une autre agence." });
+    return res.status(500).json({ error: error.message });
+  }
   res.json(data);
 });
 
 export default router;
-                                
+      
