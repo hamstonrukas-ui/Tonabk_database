@@ -77,10 +77,10 @@ router.put("/:id", verifyAuth, async (req, res) => {
     return res.status(403).json({ error: "Non autorisé" });
   }
 
-  const { nom, description, telephone, ville, commune, quartier, logo_url } = req.body;
+  const { nom, description, telephone, ville, commune, quartier, categorie_id, logo_url } = req.body;
   const { data, error } = await supabaseAdmin
     .from("boutiques")
-    .update({ nom, description, telephone, ville, commune, quartier, logo_url })
+    .update({ nom, description, telephone, ville, commune, quartier, categorie_id, logo_url })
     .eq("id", req.params.id)
     .select()
     .single();
