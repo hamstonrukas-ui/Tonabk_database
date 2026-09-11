@@ -3,6 +3,7 @@ import { verifyAuth, supabaseAdmin } from "../middleware/verifyAuth.js";
 
 const router = express.Router();
 const SEUIL_FAIBLE = 5;
+const MAX_ARTICLES = 10;
 
 async function maBoutique(userId) {
   const { data } = await supabaseAdmin.from("boutiques").select("id, taux_change_fc").eq("owner_id", userId).maybeSingle();
@@ -56,6 +57,15 @@ router.get("/articles", verifyAuth, async (req, res) => {
 router.post("/articles", verifyAuth, async (req, res) => {
   const boutique = await maBoutique(req.user.id);
   if (!boutique) return res.status(403).json({ error: "Vous n'avez pas encore de boutique" });
+
+  const { count } = await supabaseAdmin
+    .from("articles_inventaire")
+    .select("id", { count: "exact", head: true })
+    .eq("boutique_id", boutique.id);
+
+  if (count >= MAX_ARTICLES) {
+    return res.status(400).json({ error: `Vous avez atteint la limite de ${MAX_ARTICLES} articles. Supprimez-en un pour en ajouter un nouveau.` });
+  }
 
   const { nom, prix, devise } = req.body;
   if (!nom || !nom.trim()) return res.status(400).json({ error: "Le nom de l'article est requis" });
@@ -222,4 +232,4 @@ router.put("/taux-change", verifyAuth, async (req, res) => {
 });
 
 export default router;
-           
+    
