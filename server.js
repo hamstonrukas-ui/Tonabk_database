@@ -14,6 +14,7 @@ import parrainageRoutes from "./routes/parrainage.js";
 import categoriesRoutes from "./routes/categories.js";
 import adminStatsRoutes from "./routes/admin-stats.js";
 import analyticsRoutes from "./routes/analytics.js";
+import adminAnalyticsRoutes from "./routes/admin-analytics.js";
 import inventaireRoutes from "./routes/inventaire.js";
 import partageRoutes from "./routes/partage.js";
 
@@ -36,6 +37,7 @@ app.use("/api/parrainage", parrainageRoutes);
 app.use("/api/categories", categoriesRoutes);
 app.use("/api/admin-stats", adminStatsRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/admin-analytics", adminAnalyticsRoutes);
 app.use("/api/inventaire", inventaireRoutes);
 app.use("/partage", partageRoutes);
 
