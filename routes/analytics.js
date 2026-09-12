@@ -3,21 +3,36 @@ import { supabaseAdmin } from "../middleware/verifyAuth.js";
 
 const router = express.Router();
 
-// Enregistrer une visite (appelé une fois par session, pas à chaque navigation)
-router.post("/visite", async (req, res) => {
-  await supabaseAdmin.from("evenements_analytics").insert({ type: "visite" });
-  res.status(204).end();
-});
+// Routes PUBLIQUES (pas de verifyAuth) — appelées par n'importe quel visiteur,
+// connecté ou non, donc pas d'authentification requise ici.
 
-// Enregistrer un clic sur "Acheter / Contacter sur WhatsApp"
 router.post("/clic-whatsapp", async (req, res) => {
-  const { cible_type, cible_id } = req.body;
-  await supabaseAdmin.from("evenements_analytics").insert({
+  const { cible_type, cible_id, session_id } = req.body;
+
+  const { error } = await supabaseAdmin.from("evenements_analytics").insert({
     type: "clic_whatsapp",
     cible_type: cible_type || null,
     cible_id: cible_id || null,
+    session_id: session_id || null,
   });
-  res.status(204).end();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true });
+});
+
+router.post("/visite", async (req, res) => {
+  const { cible_type, cible_id, session_id } = req.body;
+
+  const { error } = await supabaseAdmin.from("evenements_analytics").insert({
+    type: "visite",
+    cible_type: cible_type || "site",
+    cible_id: cible_id || null,
+    session_id: session_id || null,
+  });
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true });
 });
 
 export default router;
+    
