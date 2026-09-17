@@ -71,11 +71,12 @@ router.get("/mine", verifyAuth, async (req, res) => {
 
 // Lister les maisons disponibles
 router.get("/", async (req, res) => {
-  const { quartier, type_bien } = req.query;
+  const { quartier, type_bien, ville } = req.query;
 
   let query = supabaseAdmin.from("maisons").select("*, photos_maisons(url, ordre)").eq("statut", "disponible");
   if (quartier) query = query.eq("quartier", quartier);
   if (type_bien) query = query.eq("type_bien", type_bien);
+  if (ville) query = query.eq("ville", ville);
 
   const { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
