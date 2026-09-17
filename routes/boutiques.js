@@ -49,9 +49,10 @@ router.get("/mine", verifyAuth, async (req, res) => {
 
 // Lister les boutiques actives
 router.get("/", async (req, res) => {
-  const { categorie_id } = req.query;
+  const { categorie_id, ville } = req.query;
   let query = supabaseAdmin.from("boutiques").select("*, categories(nom, icone)").eq("statut", "actif");
   if (categorie_id) query = query.eq("categorie_id", categorie_id);
+  if (ville) query = query.eq("ville", ville);
 
   const { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
