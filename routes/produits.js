@@ -59,18 +59,23 @@ function hash(str) {
 router.get("/accueil", async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page) || 1);
   const limit = Math.max(1, parseInt(req.query.limit) || 10);
+  const { ville } = req.query;
   const maintenant = new Date().toISOString();
 
-  const { data: sponsorises } = await supabaseAdmin
+  const { data: sponsorisesBruts } = await supabaseAdmin
     .from("produits")
     .select("*, boutiques(nom, certifiee, telephone, ville)")
     .eq("sponsorise", true)
     .gt("sponsorise_jusqua", maintenant);
 
-  const { data: normauxBruts } = await supabaseAdmin
+  const { data: normauxBrutsAvantFiltre } = await supabaseAdmin
     .from("produits")
     .select("*, boutiques(nom, certifiee, telephone, ville)")
     .or(`sponsorise.eq.false,sponsorise.is.null,sponsorise_jusqua.lt.${maintenant}`);
+
+  const filtrerVille = (liste) => (ville ? (liste || []).filter((p) => p.boutiques?.ville === ville) : liste || []);
+  const sponsorises = filtrerVille(sponsorisesBruts);
+  const normauxBruts = filtrerVille(normauxBrutsAvantFiltre);
 
   const seed = seedDuJour();
   const normaux = [...(normauxBruts || [])].sort(
@@ -154,5 +159,4 @@ router.put("/admin/:id/sponsoriser", verifyAuth, async (req, res) => {
 });
 
 export default router;
-
-    
+  
