@@ -7,6 +7,10 @@ import { verifyAuth, supabaseAdmin } from "../middleware/verifyAuth.js";
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
+function estAdmin(req) {
+  return req.user.app_metadata?.role === "admin" || req.user.user_metadata?.role === "admin";
+}
+
 const r2 = new S3Client({
   region: "auto",
   endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
@@ -29,7 +33,7 @@ router.post("/photo", verifyAuth, upload.single("photo"), async (req, res) => {
       .eq("id", boutiqueId)
       .single();
 
-    if (!boutique || boutique.owner_id !== req.user.id) {
+    if (!boutique || (boutique.owner_id !== req.user.id && !estAdmin(req))) {
       return res.status(403).json({ error: "Non autorisé sur cette boutique" });
     }
 
