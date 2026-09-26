@@ -3,7 +3,12 @@ import { verifyAuth, supabaseAdmin } from "../middleware/verifyAuth.js";
 
 const router = express.Router();
 
-async function verifierProprietaireBoutique(boutiqueId, userId) {
+function estAdmin(req) {
+  return req.user.app_metadata?.role === "admin" || req.user.user_metadata?.role === "admin";
+}
+
+async function verifierProprietaireBoutique(boutiqueId, userId, req) {
+  if (req && estAdmin(req)) return true;
   const { data } = await supabaseAdmin.from("boutiques").select("owner_id").eq("id", boutiqueId).single();
   return data && data.owner_id === userId;
 }
@@ -12,7 +17,7 @@ async function verifierProprietaireBoutique(boutiqueId, userId) {
 router.post("/", verifyAuth, async (req, res) => {
   const { boutique_id, nom, prix, devise, stock, description, photo_url, photo_thumb_url, prix_gros, quantite_min_gros } = req.body;
 
-  const autorise = await verifierProprietaireBoutique(boutique_id, req.user.id);
+  const autorise = await verifierProprietaireBoutique(boutique_id, req.user.id, req);
   if (!autorise) return res.status(403).json({ error: "Non autorisé sur cette boutique" });
 
   const { data, error } = await supabaseAdmin
@@ -100,7 +105,7 @@ router.put("/:id", verifyAuth, async (req, res) => {
   const { data: produit } = await supabaseAdmin.from("produits").select("boutique_id").eq("id", req.params.id).single();
   if (!produit) return res.status(404).json({ error: "Produit introuvable" });
 
-  const autorise = await verifierProprietaireBoutique(produit.boutique_id, req.user.id);
+  const autorise = await verifierProprietaireBoutique(produit.boutique_id, req.user.id, req);
   if (!autorise) return res.status(403).json({ error: "Non autorisé" });
 
   const { nom, prix, devise, stock, description, prix_gros, quantite_min_gros, photo_url, photo_thumb_url } = req.body;
@@ -128,7 +133,7 @@ router.delete("/:id", verifyAuth, async (req, res) => {
   const { data: produit } = await supabaseAdmin.from("produits").select("boutique_id").eq("id", req.params.id).single();
   if (!produit) return res.status(404).json({ error: "Produit introuvable" });
 
-  const autorise = await verifierProprietaireBoutique(produit.boutique_id, req.user.id);
+  const autorise = await verifierProprietaireBoutique(produit.boutique_id, req.user.id, req);
   if (!autorise) return res.status(403).json({ error: "Non autorisé" });
 
   const { error } = await supabaseAdmin.from("produits").delete().eq("id", req.params.id);
@@ -137,10 +142,6 @@ router.delete("/:id", verifyAuth, async (req, res) => {
 });
 
 // --- Admin : sponsoring ---
-function estAdmin(req) {
-  return req.user.app_metadata?.role === "admin" || req.user.user_metadata?.role === "admin";
-}
-
 router.put("/admin/:id/sponsoriser", verifyAuth, async (req, res) => {
   if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
 
@@ -159,4 +160,6 @@ router.put("/admin/:id/sponsoriser", verifyAuth, async (req, res) => {
 });
 
 export default router;
+
+                                            
   
