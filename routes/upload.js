@@ -3,6 +3,7 @@ import multer from "multer";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { randomUUID } from "crypto";
 import { verifyAuth, supabaseAdmin } from "../middleware/verifyAuth.js";
+import { estAdminSecondaire } from "../middleware/roles.js";
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -33,7 +34,7 @@ router.post("/photo", verifyAuth, upload.single("photo"), async (req, res) => {
       .eq("id", boutiqueId)
       .single();
 
-    if (!boutique || (boutique.owner_id !== req.user.id && !estAdmin(req))) {
+    if (!boutique || (boutique.owner_id !== req.user.id && !estAdmin(req) && !estAdminSecondaire(req))) {
       return res.status(403).json({ error: "Non autorisé sur cette boutique" });
     }
 
@@ -152,4 +153,5 @@ router.post("/photo-maison", verifyAuth, upload.single("photo"), async (req, res
 
 export default router;
 
-    
+
+      
