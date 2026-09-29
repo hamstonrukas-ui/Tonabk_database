@@ -1,6 +1,7 @@
 
 import express from "express";
 import { verifyAuth, supabaseAdmin } from "../middleware/verifyAuth.js";
+import { estAdminSecondaire } from "../middleware/roles.js";
 
 const router = express.Router();
 
@@ -19,13 +20,13 @@ router.post("/", verifyAuth, async (req, res) => {
     return res.status(409).json({ error: "Vous avez déjà une boutique. Un seul compte ne peut créer qu'une boutique." });
   }
 
-  const { nom, categorie_id, description, telephone, ville, commune, quartier } = req.body;
+  const { nom, categorie_id, description, telephone, quartier } = req.body;
 
   const { data, error } = await supabaseAdmin
     .from("boutiques")
     .insert({
       owner_id: req.user.id,
-      nom, categorie_id, description, telephone, ville, commune, quartier,
+      nom, categorie_id, description, telephone, quartier,
       statut: "actif",
       revue_admin: false,
     })
@@ -49,10 +50,9 @@ router.get("/mine", verifyAuth, async (req, res) => {
 
 // Lister les boutiques actives
 router.get("/", async (req, res) => {
-  const { categorie_id, ville } = req.query;
+  const { categorie_id } = req.query;
   let query = supabaseAdmin.from("boutiques").select("*, categories(nom, icone)").eq("statut", "actif");
   if (categorie_id) query = query.eq("categorie_id", categorie_id);
-  if (ville) query = query.eq("ville", ville);
 
   const { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
@@ -78,10 +78,10 @@ router.put("/:id", verifyAuth, async (req, res) => {
     return res.status(403).json({ error: "Non autorisé" });
   }
 
-  const { nom, description, telephone, ville, commune, quartier, categorie_id, logo_url } = req.body;
+  const { nom, description, telephone, quartier } = req.body;
   const { data, error } = await supabaseAdmin
     .from("boutiques")
-    .update({ nom, description, telephone, ville, commune, quartier, categorie_id, logo_url })
+    .update({ nom, description, telephone, quartier })
     .eq("id", req.params.id)
     .select()
     .single();
@@ -262,6 +262,21 @@ router.delete("/notes/:noteId", verifyAuth, async (req, res) => {
 
 // --- Routes ADMIN ---
 
+// Liste de toutes les boutiques (admin et admin secondaire) — champs minimaux seulement
+router.get("/admin/toutes", verifyAuth, async (req, res) => {
+  if (!estAdmin(req) && !estAdminSecondaire(req)) {
+    return res.status(403).json({ error: "Réservé à l'équipe d'administration" });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("boutiques")
+    .select("id, nom, ville, commune, quartier, logo_url, statut, certifiee, categories(nom)")
+    .order("created_at", { ascending: false });
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
 // Boutiques pas encore examinées par l'admin (toujours actives publiquement entre-temps)
 router.get("/admin/nouvelles", verifyAuth, async (req, res) => {
   if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
@@ -369,3 +384,4 @@ router.put("/admin/:id/retirer-certification", verifyAuth, async (req, res) => {
 });
 
 export default router;
+    
