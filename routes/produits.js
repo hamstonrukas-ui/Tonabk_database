@@ -1,5 +1,6 @@
   import express from "express";
 import { verifyAuth, supabaseAdmin } from "../middleware/verifyAuth.js";
+import { estAdminSecondaire } from "../middleware/roles.js";
 
 const router = express.Router();
 
@@ -7,8 +8,9 @@ function estAdmin(req) {
   return req.user.app_metadata?.role === "admin" || req.user.user_metadata?.role === "admin";
 }
 
-async function verifierProprietaireBoutique(boutiqueId, userId, req) {
+async function verifierProprietaireBoutique(boutiqueId, userId, req, { sousAdminAutorise = false } = {}) {
   if (req && estAdmin(req)) return true;
+  if (req && sousAdminAutorise && estAdminSecondaire(req)) return true;
   const { data } = await supabaseAdmin.from("boutiques").select("owner_id").eq("id", boutiqueId).single();
   return data && data.owner_id === userId;
 }
@@ -17,7 +19,7 @@ async function verifierProprietaireBoutique(boutiqueId, userId, req) {
 router.post("/", verifyAuth, async (req, res) => {
   const { boutique_id, nom, prix, devise, stock, description, photo_url, photo_thumb_url, prix_gros, quantite_min_gros } = req.body;
 
-  const autorise = await verifierProprietaireBoutique(boutique_id, req.user.id, req);
+  const autorise = await verifierProprietaireBoutique(boutique_id, req.user.id, req, { sousAdminAutorise: true });
   if (!autorise) return res.status(403).json({ error: "Non autorisé sur cette boutique" });
 
   const { data, error } = await supabaseAdmin
@@ -133,11 +135,59 @@ router.delete("/:id", verifyAuth, async (req, res) => {
   const { data: produit } = await supabaseAdmin.from("produits").select("boutique_id").eq("id", req.params.id).single();
   if (!produit) return res.status(404).json({ error: "Produit introuvable" });
 
-  const autorise = await verifierProprietaireBoutique(produit.boutique_id, req.user.id, req);
+  const autorise = await verifierProprietaireBoutique(produit.boutique_id, req.user.id, req, { sousAdminAutorise: true });
   if (!autorise) return res.status(403).json({ error: "Non autorisé" });
 
   const { error } = await supabaseAdmin.from("produits").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
+  res.status(204).send();
+});
+
+const MAX_PHOTOS_PAR_PRODUIT = 5; // 1 principale (produits.photo_url) + jusqu'à 4 en galerie
+
+// Ajouter une photo supplémentaire (modèle/couleur) à une annonce existante —
+// ne compte jamais dans le quota de photos gratuites de la boutique.
+router.post("/:id/photos", verifyAuth, async (req, res) => {
+  const { data: produit } = await supabaseAdmin.from("produits").select("boutique_id").eq("id", req.params.id).single();
+  if (!produit) return res.status(404).json({ error: "Produit introuvable" });
+
+  const autorise = await verifierProprietaireBoutique(produit.boutique_id, req.user.id, req, { sousAdminAutorise: true });
+  if (!autorise) return res.status(403).json({ error: "Non autorisé" });
+
+  const { count } = await supabaseAdmin
+    .from("photos_produits")
+    .select("id", { count: "exact", head: true })
+    .eq("produit_id", req.params.id);
+
+  if (count >= MAX_PHOTOS_PAR_PRODUIT - 1) {
+    return res.status(400).json({ error: `Maximum ${MAX_PHOTOS_PAR_PRODUIT} photos par annonce (photo principale incluse).` });
+  }
+
+  const { url, thumb_url, ordre } = req.body;
+  const { data, error } = await supabaseAdmin
+    .from("photos_produits")
+    .insert({ produit_id: req.params.id, url, thumb_url: thumb_url || url, ordre: ordre || 0 })
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(201).json(data);
+});
+
+// Retirer une photo de la galerie (pas la photo principale)
+router.delete("/photos/:photoId", verifyAuth, async (req, res) => {
+  const { data: photo } = await supabaseAdmin
+    .from("photos_produits")
+    .select("id, produit_id, produits(boutique_id)")
+    .eq("id", req.params.photoId)
+    .single();
+
+  if (!photo) return res.status(404).json({ error: "Photo introuvable" });
+
+  const autorise = await verifierProprietaireBoutique(photo.produits.boutique_id, req.user.id, req);
+  if (!autorise) return res.status(403).json({ error: "Non autorisé" });
+
+  await supabaseAdmin.from("photos_produits").delete().eq("id", req.params.photoId);
   res.status(204).send();
 });
 
@@ -161,5 +211,4 @@ router.put("/admin/:id/sponsoriser", verifyAuth, async (req, res) => {
 
 export default router;
 
-                                            
-  
+    
