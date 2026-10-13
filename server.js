@@ -1,4 +1,4 @@
-import express from "express";
+ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import uploadRoutes from "./routes/upload.js";
@@ -17,6 +17,8 @@ import analyticsRoutes from "./routes/analytics.js";
 import adminAnalyticsRoutes from "./routes/admin-analytics.js";
 import inventaireRoutes from "./routes/inventaire.js";
 import partageRoutes from "./routes/partage.js";
+import personnelRoutes from "./routes/personnel.js";
+import presencesRoutes from "./routes/presences.js";
 
 dotenv.config();
 const app = express();
@@ -40,6 +42,8 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/admin-analytics", adminAnalyticsRoutes);
 app.use("/api/inventaire", inventaireRoutes);
 app.use("/partage", partageRoutes);
+app.use("/api/personnel", personnelRoutes);
+app.use("/api/presences", presencesRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Serveur TonaBk lancé sur le port ${PORT}`));
