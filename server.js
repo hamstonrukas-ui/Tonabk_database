@@ -19,7 +19,7 @@ import inventaireRoutes from "./routes/inventaire.js";
 import partageRoutes from "./routes/partage.js";
 import personnelRoutes from "./routes/personnel.js";
 import presencesRoutes from "./routes/presences.js";
-import soldesRoutes from "./routes/soldes.js";
+import recuperationBoutiqueRoutes from "./routes/recuperation-boutique.js";
 
 dotenv.config();
 const app = express();
@@ -45,7 +45,7 @@ app.use("/api/inventaire", inventaireRoutes);
 app.use("/partage", partageRoutes);
 app.use("/api/personnel", personnelRoutes);
 app.use("/api/presences", presencesRoutes);
-app.use("/api/soldes", soldesRoutes);
+app.use("/api/recuperation-boutique", recuperationBoutiqueRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Serveur TonaBk lancé sur le port ${PORT}`));
