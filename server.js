@@ -1,9 +1,10 @@
- import express from "express";
+  import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import uploadRoutes from "./routes/upload.js";
 import boutiquesRoutes from "./routes/boutiques.js";
 import produitsRoutes from "./routes/produits.js";
+import accueilProduitsRoutes from "./routes/accueil-produits.js";
 import maisonsRoutes from "./routes/maisons.js";
 import commissionnairesRoutes from "./routes/commissionnaires.js";
 import favorisRoutes from "./routes/favoris.js";
@@ -31,6 +32,7 @@ app.use(express.json());
 
 app.use("/api/upload", uploadRoutes);
 app.use("/api/boutiques", boutiquesRoutes);
+app.use("/api/produits/accueil", accueilProduitsRoutes);
 app.use("/api/produits", produitsRoutes);
 app.use("/api/maisons", maisonsRoutes);
 app.use("/api/commissionnaires", commissionnairesRoutes);
