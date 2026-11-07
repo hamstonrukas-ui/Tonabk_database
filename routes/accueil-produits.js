@@ -33,17 +33,37 @@ async function toutLire(construireRequete) {
   return tout;
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Une sous-catégorie + ses enfants directs (2 niveaux : Femme -> Robes)
+async function idsAvecEnfants(id) {
+  if (!UUID.test(String(id))) return [];
+  const { data, error } = await supabaseAdmin
+    .from("sous_categories")
+    .select("id")
+    .or(`id.eq.${id},parent_id.eq.${id}`);
+  if (error) throw error;
+  return (data || []).map((r) => r.id);
+}
+
 // Remplace GET /api/produits/accueil (monté avant l'ancienne route, qui n'est plus atteinte)
 router.get("/", async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.max(1, parseInt(req.query.limit) || 10);
-    const { ville, categorie_id } = req.query;
+    const { ville, categorie_id, sous_categorie_id } = req.query;
     const maintenant = new Date().toISOString();
+
+    let idsSousCat = null;
+    if (sous_categorie_id) {
+      idsSousCat = await idsAvecEnfants(sous_categorie_id);
+      if (!idsSousCat.length) return res.json({ data: [], total: 0, page, totalPages: 1 });
+    }
 
     const filtrer = (q) => {
       if (ville) q = q.eq("boutiques.ville", ville);
       if (categorie_id) q = q.eq("boutiques.categorie_id", categorie_id);
+      if (idsSousCat) q = q.in("sous_categorie_id", idsSousCat);
       return q;
     };
 
