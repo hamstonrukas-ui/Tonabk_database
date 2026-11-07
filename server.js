@@ -1,4 +1,4 @@
-   import express from "express";
+  import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import uploadRoutes from "./routes/upload.js";
@@ -23,7 +23,8 @@ import presencesRoutes from "./routes/presences.js";
 import recuperationBoutiqueRoutes from "./routes/recuperation-boutique.js";
 import livraisonsRoutes from "./routes/livraisons.js";
 import soldesRoutes from "./routes/soldes.js";
-import suiviPersonnelRoutes from "./routes/suivi-personnel.js";
+import sousCategoriesRoutes from "./routes/sous-categories.js";
+import adminClassementRoutes from "./routes/admin-classement.js";
 
 dotenv.config();
 const app = express();
@@ -43,6 +44,8 @@ app.use("/api/reponses", reponsesRoutes);
 app.use("/api/avis", avisRoutes);
 app.use("/api/parrainage", parrainageRoutes);
 app.use("/api/categories", categoriesRoutes);
+app.use("/api/sous-categories", sousCategoriesRoutes);
+app.use("/api/admin-classement", adminClassementRoutes);
 app.use("/api/admin-stats", adminStatsRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/admin-analytics", adminAnalyticsRoutes);
@@ -53,7 +56,6 @@ app.use("/api/presences", presencesRoutes);
 app.use("/api/recuperation-boutique", recuperationBoutiqueRoutes);
 app.use("/api/livraisons", livraisonsRoutes);
 app.use("/api/soldes", soldesRoutes);
-app.use("/api/suivi-personnel", suiviPersonnelRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Serveur TonaBk lancé sur le port ${PORT}`));
