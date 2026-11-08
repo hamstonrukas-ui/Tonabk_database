@@ -5,9 +5,9 @@ const router = express.Router();
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Réservé à l'admin. Le rôle est lu UNIQUEMENT dans app_metadata (user_metadata est modifiable par chaque utilisateur).
+// Réservé à l'admin : même vérification que les autres routes admin (boutiques, personnel, maisons...)
 function estAdmin(req) {
-  return req.user.app_metadata?.role === "admin";
+  return req.user.app_metadata?.role === "admin" || req.user.user_metadata?.role === "admin";
 }
 
 // GET /api/admin-classement/produits?categorie_id=...&statut=a_ranger|ranges&page=1&limit=60
