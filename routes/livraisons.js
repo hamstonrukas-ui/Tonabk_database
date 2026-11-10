@@ -1,7 +1,7 @@
 import express from "express";
 import { verifyAuth, supabaseAdmin } from "../middleware/verifyAuth.js";
 import { estAdminSecondaire } from "../middleware/roles.js";
-import { ajouterStock } from "../middleware/stockSolde.js";
+import { ajouterStock, DUREE_RESERVATION_MIN } from "../middleware/stockSolde.js";
 
 const router = express.Router();
 
@@ -14,12 +14,41 @@ function estEquipe(req) {
 
 const STATUTS = ["brouillon", "en_attente", "acceptee", "en_route", "livree", "annulee"];
 
+// Anti-abus : un même appareil ne peut pas « vider » un solde en cliquant sur « Livre-moi » en boucle
+// (3 demandes maximum par offre pendant la durée de réservation).
+const demandesParAppareil = new Map(); // "ip|solde" -> [horodatages]
+function limiteAtteinte(req, soldeId) {
+  const ip = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.ip;
+  const cle = `${ip}|${soldeId}`;
+  const maintenant = Date.now();
+  if (demandesParAppareil.size > 5000) demandesParAppareil.clear();
+  const recentes = (demandesParAppareil.get(cle) || []).filter((t) => maintenant - t < DUREE_RESERVATION_MIN * 60000);
+  if (recentes.length >= 3) {
+    demandesParAppareil.set(cle, recentes);
+    return true;
+  }
+  recentes.push(maintenant);
+  demandesParAppareil.set(cle, recentes);
+  return false;
+}
+
 // Le client clique "Livre-moi à la maison" : on crée un brouillon, la discussion se fait sur WhatsApp
 router.post("/", async (req, res) => {
   const { produit_id, solde_id, boutique_id, nom_produit, prix, devise } = req.body;
 
   if (!nom_produit || prix == null) {
     return res.status(400).json({ error: "Produit et prix requis" });
+  }
+
+  // Offre en solde : le clic réserve un article. Impossible si le stock est écoulé.
+  if (solde_id) {
+    const { data: solde } = await supabaseAdmin.from("soldes").select("*").eq("id", solde_id).maybeSingle();
+    if (solde && (await ajouterStock(solde)).restant === 0) {
+      return res.status(409).json({ error: "Stock écoulé : cette offre n'est plus disponible." });
+    }
+    if (limiteAtteinte(req, solde_id)) {
+      return res.status(429).json({ error: "Vous avez déjà plusieurs demandes en cours pour cette offre." });
+    }
   }
 
   const { data, error } = await supabaseAdmin
@@ -50,17 +79,21 @@ router.put("/:id/demarrer", async (req, res) => {
     return res.status(400).json({ error: "Nom, téléphone et adresse requis" });
   }
 
-  // Un solde dont le stock est écoulé ne peut plus être commandé
+  // La réservation faite au clic sur « Livre-moi » garde l'article le temps de conclure.
+  // Si elle a expiré, on vérifie qu'il reste du stock avant de lancer la livraison.
   const { data: brouillon } = await supabaseAdmin
     .from("livraisons")
-    .select("solde_id")
+    .select("solde_id, created_at")
     .eq("id", req.params.id)
     .eq("statut", "brouillon")
     .maybeSingle();
   if (brouillon?.solde_id) {
-    const { data: solde } = await supabaseAdmin.from("soldes").select("*").eq("id", brouillon.solde_id).maybeSingle();
-    if (solde && (await ajouterStock(solde)).restant === 0) {
-      return res.status(409).json({ error: "Stock écoulé : cette offre n'est plus disponible." });
+    const reservationValide = Date.now() - new Date(brouillon.created_at).getTime() < DUREE_RESERVATION_MIN * 60000;
+    if (!reservationValide) {
+      const { data: solde } = await supabaseAdmin.from("soldes").select("*").eq("id", brouillon.solde_id).maybeSingle();
+      if (solde && (await ajouterStock(solde)).restant === 0) {
+        return res.status(409).json({ error: "Stock écoulé : cette offre n'est plus disponible." });
+      }
     }
   }
 
