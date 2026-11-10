@@ -10,8 +10,9 @@ function estAdmin(req) {
   return req.user.app_metadata?.role === "admin" || req.user.user_metadata?.role === "admin";
 }
 
-// GET /api/admin-classement/produits?categorie_id=...&statut=a_ranger|ranges&page=1&limit=60
+// GET /api/admin-classement/produits?categorie_id=...&statut=a_ranger|ranges|rupture&page=1&limit=60
 // a_ranger = articles de cette catégorie PAS ENCORE rangés ; ranges = déjà rangés (pour corriger une erreur)
+// rupture = articles en rupture de stock (stock à 0), rangés ou non, pour leur remettre une quantité
 router.get("/produits", verifyAuth, async (req, res) => {
   if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
 
@@ -25,7 +26,7 @@ router.get("/produits", verifyAuth, async (req, res) => {
   let requete = supabaseAdmin
     .from("produits")
     .select(
-      "id, nom, prix, devise, photo_url, photo_thumb_url, sous_categorie_id, sous_categories(nom), boutiques!inner(nom, categorie_id)",
+      "id, nom, prix, devise, stock, photo_url, photo_thumb_url, sous_categorie_id, sous_categories(nom), boutiques!inner(nom, categorie_id)",
       { count: "exact" }
     )
     .eq("boutiques.categorie_id", categorie_id)
@@ -34,9 +35,13 @@ router.get("/produits", verifyAuth, async (req, res) => {
 
   if (q) requete = requete.ilike("nom", `%${q}%`);
 
-  requete = statut === "ranges"
-    ? requete.not("sous_categorie_id", "is", null)
-    : requete.is("sous_categorie_id", null);
+  if (statut === "rupture") {
+    requete = requete.or("stock.lte.0,stock.is.null");
+  } else {
+    requete = statut === "ranges"
+      ? requete.not("sous_categorie_id", "is", null)
+      : requete.is("sous_categorie_id", null);
+  }
 
   const { data, error, count } = await requete;
   if (error) return res.status(500).json({ error: error.message });
@@ -73,6 +78,54 @@ router.put("/produits/:id/prix", verifyAuth, async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
   if (!data) return res.status(404).json({ error: "Article introuvable" });
   res.json({ ok: true, ...data });
+});
+
+// PUT /api/admin-classement/produits/:id/stock   { stock }
+// L'admin remet une quantité sur un article en rupture (ou corrige un stock).
+router.put("/produits/:id/stock", verifyAuth, async (req, res) => {
+  if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
+
+  const { id } = req.params;
+  if (!/^[\w-]{1,64}$/.test(id)) return res.status(400).json({ error: "Identifiant d'article invalide" });
+
+  const stock = Number(req.body?.stock);
+  if (!Number.isInteger(stock) || stock < 0 || stock > 1e6) {
+    return res.status(400).json({ error: "Stock invalide (nombre entier de 0 à 1 000 000)" });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("produits")
+    .update({ stock })
+    .eq("id", id)
+    .select("id, stock")
+    .maybeSingle();
+
+  if (error) return res.status(500).json({ error: error.message });
+  if (!data) return res.status(404).json({ error: "Article introuvable" });
+  res.json({ ok: true, ...data });
+});
+
+// POST /api/admin-classement/stock-aleatoire   { produit_ids: [...] }
+// Donne à chaque article un stock au hasard de 1 à 100 (jamais 0).
+router.post("/stock-aleatoire", verifyAuth, async (req, res) => {
+  if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
+
+  const { produit_ids } = req.body || {};
+  if (!Array.isArray(produit_ids) || produit_ids.length === 0 || produit_ids.length > 200) {
+    return res.status(400).json({ error: "Liste d'articles invalide" });
+  }
+  if (!produit_ids.every((id) => UUID.test(String(id)))) {
+    return res.status(400).json({ error: "Identifiant d'article invalide" });
+  }
+
+  const resultats = await Promise.all(
+    produit_ids.map((id) =>
+      supabaseAdmin.from("produits").update({ stock: Math.floor(Math.random() * 100) + 1 }).eq("id", id)
+    )
+  );
+  const echecs = resultats.filter((r) => r.error).length;
+  if (echecs === produit_ids.length) return res.status(500).json({ error: "Échec de la mise à jour" });
+  res.json({ ok: true, modifies: produit_ids.length - echecs, echecs });
 });
 
 // POST /api/admin-classement/classer
