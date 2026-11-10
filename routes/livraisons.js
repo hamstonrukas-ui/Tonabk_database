@@ -1,6 +1,7 @@
 import express from "express";
 import { verifyAuth, supabaseAdmin } from "../middleware/verifyAuth.js";
 import { estAdminSecondaire } from "../middleware/roles.js";
+import { ajouterStock } from "../middleware/stockSolde.js";
 
 const router = express.Router();
 
@@ -47,6 +48,20 @@ router.put("/:id/demarrer", async (req, res) => {
   const { client_nom, client_telephone, client_adresse } = req.body;
   if (!client_nom?.trim() || !client_telephone?.trim() || !client_adresse?.trim()) {
     return res.status(400).json({ error: "Nom, téléphone et adresse requis" });
+  }
+
+  // Un solde dont le stock est écoulé ne peut plus être commandé
+  const { data: brouillon } = await supabaseAdmin
+    .from("livraisons")
+    .select("solde_id")
+    .eq("id", req.params.id)
+    .eq("statut", "brouillon")
+    .maybeSingle();
+  if (brouillon?.solde_id) {
+    const { data: solde } = await supabaseAdmin.from("soldes").select("*").eq("id", brouillon.solde_id).maybeSingle();
+    if (solde && (await ajouterStock(solde)).restant === 0) {
+      return res.status(409).json({ error: "Stock écoulé : cette offre n'est plus disponible." });
+    }
   }
 
   const { data, error } = await supabaseAdmin
