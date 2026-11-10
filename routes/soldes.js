@@ -1,5 +1,6 @@
 import express from "express";
 import { verifyAuth, supabaseAdmin } from "../middleware/verifyAuth.js";
+import { ajouterStock } from "../middleware/stockSolde.js";
 
 const router = express.Router();
 
@@ -16,7 +17,11 @@ router.get("/", async (req, res) => {
     .order("expire_le", { ascending: true });
 
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+  try {
+    res.json(await ajouterStock(data));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Une annonce de solde précise (pour la page détail / galerie photos)
@@ -28,7 +33,11 @@ router.get("/:id", async (req, res) => {
     .single();
 
   if (error || !data) return res.status(404).json({ error: "Solde introuvable" });
-  res.json(data);
+  try {
+    res.json(await ajouterStock(data));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Créer un solde (admin uniquement)
@@ -84,6 +93,43 @@ router.put("/:id", verifyAuth, async (req, res) => {
 
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
+});
+
+// Enregistrer une vente faite hors application (WhatsApp...) : delta = +1 ou -1 (admin uniquement)
+router.post("/:id/vendus", verifyAuth, async (req, res) => {
+  if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
+
+  const delta = Number(req.body?.delta);
+  if (!Number.isInteger(delta) || delta === 0 || Math.abs(delta) > 1000) {
+    return res.status(400).json({ error: "Variation invalide" });
+  }
+
+  const { data: ligne, error: erreurLecture } = await supabaseAdmin
+    .from("soldes")
+    .select("*")
+    .eq("id", req.params.id)
+    .maybeSingle();
+  if (erreurLecture) return res.status(500).json({ error: erreurLecture.message });
+  if (!ligne) return res.status(404).json({ error: "Solde introuvable" });
+
+  try {
+    const actuel = await ajouterStock(ligne);
+    // Les ventes manuelles ne peuvent pas dépasser ce qui reste en stock
+    const plafond = ligne.quantite > 0 ? Math.max(0, ligne.quantite - actuel.vendus_auto) : Infinity;
+    const vendus = Math.min(plafond, Math.max(0, (ligne.vendus || 0) + delta));
+
+    const { data, error } = await supabaseAdmin
+      .from("soldes")
+      .update({ vendus })
+      .eq("id", req.params.id)
+      .select()
+      .single();
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json(await ajouterStock(data));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Supprimer un solde (admin uniquement)
