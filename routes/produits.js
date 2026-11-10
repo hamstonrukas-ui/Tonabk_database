@@ -16,9 +16,21 @@ async function verifierProprietaireBoutique(boutiqueId, userId, req) {
   return data && data.owner_id === userId;
 }
 
+// Vérifie qu'une sous-catégorie existe (sinon null : l'article reste simplement non classé)
+async function sousCategorieValide(id) {
+  if (!id) return null;
+  const { data } = await supabaseAdmin
+    .from("sous_categories")
+    .select("id")
+    .eq("id", id)
+    .eq("actif", true)
+    .maybeSingle();
+  return data ? data.id : null;
+}
+
 // Ajouter un produit
 router.post("/", verifyAuth, async (req, res) => {
-  const { boutique_id, nom, prix, devise, stock, description, photo_url, photo_thumb_url, prix_gros, quantite_min_gros } = req.body;
+  const { boutique_id, nom, prix, devise, stock, description, photo_url, photo_thumb_url, prix_gros, quantite_min_gros, sous_categorie_id } = req.body;
 
   const autorise = await verifierProprietaireBoutique(boutique_id, req.user.id, req);
   if (!autorise) return res.status(403).json({ error: "Non autorisé sur cette boutique" });
@@ -29,6 +41,8 @@ router.post("/", verifyAuth, async (req, res) => {
       boutique_id, nom, prix, devise: devise || "USD", stock, description, photo_url, photo_thumb_url,
       prix_gros: prix_gros || null,
       quantite_min_gros: prix_gros ? quantite_min_gros || null : null,
+      // Le classement est réservé à l'admin complet : jamais pris en compte venant d'un commerçant
+      sous_categorie_id: estAdmin(req) ? await sousCategorieValide(sous_categorie_id) : null,
     })
     .select()
     .single();
