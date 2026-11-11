@@ -31,6 +31,21 @@ router.get("/aujourdhui", verifyAuth, async (req, res) => {
   res.json(data || null);
 });
 
+// Historique des jours de travail de l'utilisateur connecté (employé ou admin)
+router.get("/mon-historique", verifyAuth, async (req, res) => {
+  if (!estEquipe(req)) return res.status(403).json({ error: "Réservé à l'équipe" });
+
+  const { data, error } = await supabaseAdmin
+    .from("presences")
+    .select("*")
+    .eq("personnel_id", req.user.id)
+    .order("date", { ascending: false })
+    .limit(366);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
 // Signer la présence du jour (une seule fois par jour)
 router.post("/signer", verifyAuth, async (req, res) => {
   if (!estEquipe(req)) return res.status(403).json({ error: "Réservé à l'équipe" });
