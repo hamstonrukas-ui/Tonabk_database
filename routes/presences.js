@@ -35,7 +35,7 @@ router.get("/aujourdhui", verifyAuth, async (req, res) => {
 router.post("/signer", verifyAuth, async (req, res) => {
   if (!estEquipe(req)) return res.status(403).json({ error: "Réservé à l'équipe" });
 
-  const { lat, lng } = req.body;
+  const { lat, lng, adresse } = req.body;
   if (lat == null || lng == null) return res.status(400).json({ error: "Position GPS requise" });
 
   const { data: existante } = await supabaseAdmin
@@ -55,6 +55,7 @@ router.post("/signer", verifyAuth, async (req, res) => {
       heure_debut: new Date().toISOString(),
       lat_debut: lat,
       lng_debut: lng,
+      adresse_debut: typeof adresse === "string" ? adresse.trim().slice(0, 500) || null : null,
     })
     .select()
     .single();
@@ -65,7 +66,7 @@ router.post("/signer", verifyAuth, async (req, res) => {
 
 // Clôturer la journée : nouvelle position GPS + rapport
 router.put("/cloturer", verifyAuth, async (req, res) => {
-  const { lat, lng, activites, difficultes } = req.body;
+  const { lat, lng, adresse, activites, difficultes } = req.body;
   if (lat == null || lng == null) return res.status(400).json({ error: "Position GPS requise" });
   if (!activites?.trim()) return res.status(400).json({ error: "Activités réalisées requises" });
 
@@ -85,6 +86,7 @@ router.put("/cloturer", verifyAuth, async (req, res) => {
       heure_fin: new Date().toISOString(),
       lat_fin: lat,
       lng_fin: lng,
+      adresse_fin: typeof adresse === "string" ? adresse.trim().slice(0, 500) || null : null,
       activites: activites.trim(),
       difficultes: difficultes?.trim() || null,
     })
