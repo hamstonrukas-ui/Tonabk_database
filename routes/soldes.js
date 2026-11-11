@@ -44,7 +44,7 @@ router.get("/:id", async (req, res) => {
 router.post("/", verifyAuth, async (req, res) => {
   if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
 
-  const { titre, description, prix_normal, prix_solde, devise, quantite, photo_url, photos, expire_le } = req.body;
+  const { titre, description, prix_normal, prix_solde, devise, quantite, photo_url, photos, expire_le, audio_url } = req.body;
 
   if (!titre?.trim() || !prix_normal || !prix_solde || !expire_le) {
     return res.status(400).json({ error: "Titre, prix normal, prix solde et date de fin requis" });
@@ -61,6 +61,7 @@ router.post("/", verifyAuth, async (req, res) => {
       quantite: Number(quantite) || 0,
       photo_url: photo_url || (photos?.[0] ?? null),
       photos: photos || [],
+      audio_url: audio_url || null,
       expire_le,
       cree_par: req.user.id,
     })
@@ -75,7 +76,7 @@ router.post("/", verifyAuth, async (req, res) => {
 router.put("/:id", verifyAuth, async (req, res) => {
   if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
 
-  const { titre, description, prix_normal, prix_solde, devise, quantite, photo_url, photos, expire_le } = req.body;
+  const { titre, description, prix_normal, prix_solde, devise, quantite, photo_url, photos, expire_le, audio_url } = req.body;
 
   const { data, error } = await supabaseAdmin
     .from("soldes")
@@ -86,6 +87,7 @@ router.put("/:id", verifyAuth, async (req, res) => {
       devise,
       quantite: quantite != null ? Number(quantite) : undefined,
       photo_url, photos, expire_le,
+      audio_url, // absent = inchangé ; null = audio retiré
     })
     .eq("id", req.params.id)
     .select()
@@ -126,6 +128,38 @@ router.post("/:id/vendus", verifyAuth, async (req, res) => {
       .single();
     if (error) return res.status(500).json({ error: error.message });
 
+    res.json(await ajouterStock(data));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Définir directement la quantité restante (admin uniquement) : { restant: 12 }
+router.post("/:id/reste", verifyAuth, async (req, res) => {
+  if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
+
+  const restant = Number(req.body?.restant);
+  const { data: ligne, error: erreurLecture } = await supabaseAdmin
+    .from("soldes")
+    .select("*")
+    .eq("id", req.params.id)
+    .maybeSingle();
+  if (erreurLecture) return res.status(500).json({ error: erreurLecture.message });
+  if (!ligne) return res.status(404).json({ error: "Solde introuvable" });
+  if (!(ligne.quantite > 0)) return res.status(400).json({ error: "La quantité de ce solde n'est pas suivie" });
+  if (!Number.isInteger(restant) || restant < 0 || restant > ligne.quantite) {
+    return res.status(400).json({ error: `Le reste doit être un entier entre 0 et ${ligne.quantite}` });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("soldes")
+    .update({ vendus: ligne.quantite - restant })
+    .eq("id", req.params.id)
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+
+  try {
     res.json(await ajouterStock(data));
   } catch (e) {
     res.status(500).json({ error: e.message });
