@@ -7,6 +7,8 @@ import { estAdminSecondaire } from "../middleware/roles.js";
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
+// Audio des soldes : 8 Mo maximum
+const uploadAudio = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 
 function estAdmin(req) {
   return req.user.app_metadata?.role === "admin" || req.user.user_metadata?.role === "admin";
@@ -173,6 +175,43 @@ router.post("/photo-solde", verifyAuth, upload.single("photo"), async (req, res)
   } catch (error) {
     console.error("Erreur upload R2 :", error);
     res.status(500).json({ error: "Échec de l'upload de la photo" });
+  }
+});
+
+// Upload de l'audio d'une annonce de solde (admin uniquement, 8 Mo max)
+const EXTENSIONS_AUDIO = {
+  "audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/mp4": "m4a", "audio/x-m4a": "m4a", "audio/aac": "aac",
+  "audio/ogg": "ogg", "audio/wav": "wav", "audio/x-wav": "wav", "audio/webm": "webm",
+};
+router.post("/audio-solde", verifyAuth, (req, res, next) => {
+  uploadAudio.single("audio")(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.code === "LIMIT_FILE_SIZE" ? "Audio trop lourd (8 Mo maximum)" : "Fichier audio invalide" });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
+    if (!req.file) return res.status(400).json({ error: "Aucun audio reçu" });
+
+    const extension = EXTENSIONS_AUDIO[req.file.mimetype];
+    if (!extension) return res.status(400).json({ error: "Format audio non pris en charge (mp3, m4a, ogg, wav)" });
+
+    const key = `soldes/audio/${randomUUID()}.${extension}`;
+    await r2.send(
+      new PutObjectCommand({
+        Bucket: process.env.R2_BUCKET_NAME,
+        Key: key,
+        Body: req.file.buffer,
+        ContentType: req.file.mimetype,
+      })
+    );
+
+    res.json({ url: `${process.env.R2_PUBLIC_URL}/${key}` });
+  } catch (error) {
+    console.error("Erreur upload R2 (audio) :", error);
+    res.status(500).json({ error: "Échec de l'upload de l'audio" });
   }
 });
 
