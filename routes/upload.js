@@ -178,6 +178,44 @@ router.post("/photo-solde", verifyAuth, upload.single("photo"), async (req, res)
   }
 });
 
+// Upload d'une photo de nouveauté (statut de 48 h) : admin ou commerçant ayant une boutique, 6 Mo max
+const uploadNouveaute = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6 * 1024 * 1024 } });
+const EXTENSIONS_PHOTO = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+router.post("/photo-nouveaute", verifyAuth, (req, res, next) => {
+  uploadNouveaute.single("photo")(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.code === "LIMIT_FILE_SIZE" ? "Photo trop lourde (6 Mo maximum)" : "Fichier invalide" });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "Aucune photo reçue" });
+    const extension = EXTENSIONS_PHOTO[req.file.mimetype];
+    if (!extension) return res.status(400).json({ error: "Format de photo non pris en charge" });
+
+    if (!estAdmin(req)) {
+      const { data: boutiques } = await supabaseAdmin
+        .from("boutiques").select("id").eq("owner_id", req.user.id).limit(1);
+      if (!boutiques?.length) return res.status(403).json({ error: "Une boutique est nécessaire pour publier une nouveauté" });
+    }
+
+    const key = `nouveautes/${randomUUID()}.${extension}`;
+    await r2.send(
+      new PutObjectCommand({
+        Bucket: process.env.R2_BUCKET_NAME,
+        Key: key,
+        Body: req.file.buffer,
+        ContentType: req.file.mimetype,
+      })
+    );
+    res.json({ url: `${process.env.R2_PUBLIC_URL}/${key}` });
+  } catch (error) {
+    console.error("Erreur upload R2 (nouveauté) :", error);
+    res.status(500).json({ error: "Échec de l'upload de la photo" });
+  }
+});
+
 // Upload de l'audio d'une annonce de solde (admin uniquement, 8 Mo max)
 const EXTENSIONS_AUDIO = {
   "audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/mp4": "m4a", "audio/x-m4a": "m4a", "audio/aac": "aac",
