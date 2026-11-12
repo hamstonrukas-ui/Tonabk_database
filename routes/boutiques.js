@@ -275,7 +275,37 @@ router.get("/admin/toutes", verifyAuth, async (req, res) => {
     .order("created_at", { ascending: false });
 
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+
+  // Spécialité notée par l'équipe (table interne, jamais exposée au public)
+  const { data: specialites } = await supabaseAdmin.from("boutiques_specialites").select("boutique_id, specialite");
+  const parBoutique = new Map((specialites || []).map((x) => [x.boutique_id, x.specialite]));
+  res.json(data.map((b) => ({ ...b, specialite: parBoutique.get(b.id) || "" })));
+});
+
+// Noter la spécialité d'une boutique (admin et admin secondaire) : { specialite: "chaussures homme" }
+// Une valeur vide efface la spécialité.
+router.put("/admin/:id/specialite", verifyAuth, async (req, res) => {
+  if (!estAdmin(req) && !estAdminSecondaire(req)) {
+    return res.status(403).json({ error: "Réservé à l'équipe d'administration" });
+  }
+
+  const specialite = typeof req.body?.specialite === "string" ? req.body.specialite.trim().slice(0, 200) : null;
+  if (specialite === null) return res.status(400).json({ error: "Spécialité invalide" });
+
+  const { data: boutique } = await supabaseAdmin.from("boutiques").select("id").eq("id", req.params.id).maybeSingle();
+  if (!boutique) return res.status(404).json({ error: "Boutique introuvable" });
+
+  if (!specialite) {
+    const { error } = await supabaseAdmin.from("boutiques_specialites").delete().eq("boutique_id", boutique.id);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ id: boutique.id, specialite: "" });
+  }
+
+  const { error } = await supabaseAdmin
+    .from("boutiques_specialites")
+    .upsert({ boutique_id: boutique.id, specialite, updated_by: req.user.id, updated_at: new Date().toISOString() });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ id: boutique.id, specialite });
 });
 
 // Boutiques pas encore examinées par l'admin (toujours actives publiquement entre-temps)
