@@ -79,4 +79,31 @@ router.get("/solde/:id", async (req, res) => {
   }));
 });
 
+// Même principe pour une nouveauté : la photo apparaît dans le message WhatsApp du client
+router.get("/nouveaute/:id", async (req, res) => {
+  const siteUrl = process.env.FRONTEND_URL || "https://tonabk.com";
+  const urlReelle = `${siteUrl}/nouveautes`;
+
+  const { data: n } = await supabaseAdmin
+    .from("nouveautes")
+    .select("boutique_id, photo_url, photos, texte, expire_le")
+    .eq("id", req.params.id)
+    .maybeSingle();
+
+  if (!n || new Date(n.expire_le).getTime() <= Date.now()) return res.redirect(urlReelle);
+
+  let nom = "TonaBk";
+  if (n.boutique_id) {
+    const { data: b } = await supabaseAdmin.from("boutiques").select("nom").eq("id", n.boutique_id).maybeSingle();
+    if (b?.nom) nom = b.nom;
+  }
+
+  res.send(pageApercu({
+    titre: `Nouveauté — ${nom}`,
+    description: `${n.texte ? n.texte + " — " : ""}Vu sur TonaBk`,
+    image: n.photos?.[0] || n.photo_url || `${siteUrl}/icon-512.png`,
+    urlReelle,
+  }));
+});
+
 export default router;
