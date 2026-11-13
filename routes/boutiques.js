@@ -282,6 +282,46 @@ router.get("/admin/toutes", verifyAuth, async (req, res) => {
   res.json(data.map((b) => ({ ...b, specialite: parBoutique.get(b.id) || "" })));
 });
 
+// Créer une boutique au nom de l'équipe (admin principal uniquement).
+// La boutique appartient au compte admin qui la crée ; le commerçant pourra ensuite la
+// récupérer avec son compte via « Récupération de boutique » (nom + numéro WhatsApp).
+// Pas de limite « une boutique par compte » ici.
+router.post("/admin/creer", verifyAuth, async (req, res) => {
+  if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin principal" });
+
+  const texte = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+  const nom = texte(req.body.nom, 120);
+  const telephone = texte(req.body.telephone, 30);
+  if (!nom) return res.status(400).json({ error: "Le nom de la boutique est requis" });
+  if (!telephone) return res.status(400).json({ error: "Le numéro WhatsApp est requis" });
+
+  const { data, error } = await supabaseAdmin
+    .from("boutiques")
+    .insert({
+      owner_id: req.user.id,
+      nom,
+      telephone,
+      categorie_id: req.body.categorie_id || null,
+      description: texte(req.body.description, 1000),
+      ville: texte(req.body.ville, 60),
+      commune: texte(req.body.commune, 80),
+      quartier: texte(req.body.quartier, 200),
+      logo_url: texte(req.body.logo_url, 500) || null,
+      statut: "actif",
+      revue_admin: true,
+    })
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  const specialite = texte(req.body.specialite, 200);
+  if (specialite) {
+    await supabaseAdmin.from("boutiques_specialites").upsert({ boutique_id: data.id, specialite });
+  }
+  res.status(201).json(data);
+});
+
 // Noter la spécialité d'une boutique (admin et admin secondaire) : { specialite: "chaussures homme" }
 // Une valeur vide efface la spécialité.
 router.put("/admin/:id/specialite", verifyAuth, async (req, res) => {
