@@ -28,6 +28,15 @@ async function sousCategorieValide(id) {
   return data ? data.id : null;
 }
 
+// Annonce spéciale : jusqu'à 10 photos, réservé à l'équipe d'administration.
+// Renvoie la liste nettoyée (ou null si le champ est absent / non autorisé).
+function photosAnnonce(req) {
+  if (!Array.isArray(req.body.photos)) return null;
+  if (!estAdmin(req) && !estAdminSecondaire(req)) return null;
+  const prefixe = `${process.env.R2_PUBLIC_URL}/`;
+  return req.body.photos.filter((u) => typeof u === "string" && u.startsWith(prefixe)).slice(0, 10);
+}
+
 // Ajouter un produit
 router.post("/", verifyAuth, async (req, res) => {
   const { boutique_id, nom, prix, devise, stock, description, photo_url, photo_thumb_url, prix_gros, quantite_min_gros, sous_categorie_id } = req.body;
@@ -35,10 +44,13 @@ router.post("/", verifyAuth, async (req, res) => {
   const autorise = await verifierProprietaireBoutique(boutique_id, req.user.id, req);
   if (!autorise) return res.status(403).json({ error: "Non autorisé sur cette boutique" });
 
+  const photos = photosAnnonce(req);
+
   const { data, error } = await supabaseAdmin
     .from("produits")
     .insert({
       boutique_id, nom, prix, devise: devise || "USD", stock, description, photo_url, photo_thumb_url,
+      ...(photos && photos.length ? { photos, photo_url: photos[0], photo_thumb_url: photos[0] } : {}),
       prix_gros: prix_gros || null,
       quantite_min_gros: prix_gros ? quantite_min_gros || null : null,
       // Le classement est réservé à l'admin complet : jamais pris en compte venant d'un commerçant
@@ -145,6 +157,12 @@ router.put("/:id", verifyAuth, async (req, res) => {
   };
   if (photo_url) miseAJour.photo_url = photo_url;
   if (photo_thumb_url) miseAJour.photo_thumb_url = photo_thumb_url;
+  const photos = photosAnnonce(req);
+  if (photos && photos.length) {
+    miseAJour.photos = photos;
+    miseAJour.photo_url = photos[0];
+    miseAJour.photo_thumb_url = photos[0];
+  }
 
   const { data, error } = await supabaseAdmin
     .from("produits")
