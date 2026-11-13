@@ -106,4 +106,28 @@ router.get("/nouveaute/:id", async (req, res) => {
   }));
 });
 
+// Même principe pour un Kisakoshi (valise) : la première photo apparaît dans le message WhatsApp
+router.get("/kisakoshi/:id", async (req, res) => {
+  const siteUrl = process.env.FRONTEND_URL || "https://tonabk.com";
+  const urlReelle = `${siteUrl}/kisakoshi`;
+
+  const { data: k } = await supabaseAdmin
+    .from("kisakoshi")
+    .select("boutique_id, contenu, prix, devise, photos, expire_le")
+    .eq("id", req.params.id)
+    .maybeSingle();
+
+  if (!k || new Date(k.expire_le).getTime() <= Date.now()) return res.redirect(urlReelle);
+
+  const { data: b } = await supabaseAdmin.from("boutiques").select("nom").eq("id", k.boutique_id).maybeSingle();
+  const prix = `${Number(k.prix).toLocaleString("fr-FR")} ${k.devise}`;
+
+  res.send(pageApercu({
+    titre: `Kisakoshi — ${b?.nom || "TonaBk"}`,
+    description: `${k.contenu} — ${prix} — Vu sur TonaBk`,
+    image: k.photos?.[0] || `${siteUrl}/icon-512.png`,
+    urlReelle,
+  }));
+});
+
 export default router;
