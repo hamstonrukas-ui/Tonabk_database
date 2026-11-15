@@ -1,12 +1,16 @@
 import express from "express";
 import { verifyAuth, supabaseAdmin } from "../middleware/verifyAuth.js";
 import { ajouterStock } from "../middleware/stockSolde.js";
+import { estAdminSecondaire } from "../middleware/roles.js";
 
 const router = express.Router();
 
 function estAdmin(req) {
   return req.user.app_metadata?.role === "admin" || req.user.user_metadata?.role === "admin";
 }
+
+// Admin complet OU admin secondaire (créer / modifier / suivre les ventes). La suppression reste réservée à l'admin complet.
+const peutGererSoldes = (req) => estAdmin(req) || estAdminSecondaire(req);
 
 // Liste publique des soldes en cours (pas encore expirés)
 router.get("/", async (req, res) => {
@@ -42,7 +46,7 @@ router.get("/:id", async (req, res) => {
 
 // Créer un solde (admin uniquement)
 router.post("/", verifyAuth, async (req, res) => {
-  if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
+  if (!peutGererSoldes(req)) return res.status(403).json({ error: "Réservé à l'admin" });
 
   const { titre, description, prix_normal, prix_solde, devise, quantite, photo_url, photos, expire_le, audio_url } = req.body;
 
@@ -74,7 +78,7 @@ router.post("/", verifyAuth, async (req, res) => {
 
 // Modifier un solde (admin uniquement)
 router.put("/:id", verifyAuth, async (req, res) => {
-  if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
+  if (!peutGererSoldes(req)) return res.status(403).json({ error: "Réservé à l'admin" });
 
   const { titre, description, prix_normal, prix_solde, devise, quantite, photo_url, photos, expire_le, audio_url } = req.body;
 
@@ -99,7 +103,7 @@ router.put("/:id", verifyAuth, async (req, res) => {
 
 // Enregistrer une vente faite hors application (WhatsApp...) : delta = +1 ou -1 (admin uniquement)
 router.post("/:id/vendus", verifyAuth, async (req, res) => {
-  if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
+  if (!peutGererSoldes(req)) return res.status(403).json({ error: "Réservé à l'admin" });
 
   const delta = Number(req.body?.delta);
   if (!Number.isInteger(delta) || delta === 0 || Math.abs(delta) > 1000) {
@@ -136,7 +140,7 @@ router.post("/:id/vendus", verifyAuth, async (req, res) => {
 
 // Définir directement la quantité restante (admin uniquement) : { restant: 12 }
 router.post("/:id/reste", verifyAuth, async (req, res) => {
-  if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
+  if (!peutGererSoldes(req)) return res.status(403).json({ error: "Réservé à l'admin" });
 
   const restant = Number(req.body?.restant);
   const { data: ligne, error: erreurLecture } = await supabaseAdmin
