@@ -156,7 +156,7 @@ router.post("/photo-maison", verifyAuth, upload.single("photo"), async (req, res
 // Upload d'une photo de solde (admin uniquement, pas de limite ni de boutique liée)
 router.post("/photo-solde", verifyAuth, upload.single("photo"), async (req, res) => {
   try {
-    if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
+    if (!estAdmin(req) && !estAdminSecondaire(req)) return res.status(403).json({ error: "Réservé à l'admin" });
     if (!req.file) return res.status(400).json({ error: "Aucune photo reçue" });
 
     const extension = req.file.mimetype === "image/png" ? "png" : "jpg";
@@ -230,7 +230,7 @@ router.post("/audio-solde", verifyAuth, (req, res, next) => {
   });
 }, async (req, res) => {
   try {
-    if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
+    if (!estAdmin(req) && !estAdminSecondaire(req)) return res.status(403).json({ error: "Réservé à l'admin" });
     if (!req.file) return res.status(400).json({ error: "Aucun audio reçu" });
 
     const extension = EXTENSIONS_AUDIO[req.file.mimetype];
