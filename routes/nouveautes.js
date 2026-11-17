@@ -1,5 +1,6 @@
 import express from "express";
 import { verifyAuth, supabaseAdmin } from "../middleware/verifyAuth.js";
+import { estAdminSecondaire } from "../middleware/roles.js";
 
 const router = express.Router();
 
@@ -14,6 +15,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function estAdmin(req) {
   return req.user.app_metadata?.role === "admin" || req.user.user_metadata?.role === "admin";
 }
+
+// Équipe d'administration (admin complet ou secondaire) : peut publier au nom de TonaBk ou d'une boutique
+const equipeAdmin = (req) => estAdmin(req) || estAdminSecondaire(req);
 
 // --- Public : nouveautés encore actives (moins de 48 h) ---
 router.get("/", async (req, res) => {
@@ -80,7 +84,7 @@ router.post("/", verifyAuth, async (req, res) => {
     const { data: boutique } = await supabaseAdmin
       .from("boutiques").select("id, owner_id, statut").eq("id", boutique_id).maybeSingle();
     if (!boutique) return res.status(404).json({ error: "Boutique introuvable" });
-    if (boutique.owner_id !== req.user.id && !estAdmin(req)) {
+    if (boutique.owner_id !== req.user.id && !equipeAdmin(req)) {
       return res.status(403).json({ error: "Cette boutique n'est pas la vôtre" });
     }
     if (boutique.statut !== "actif") return res.status(403).json({ error: "Votre boutique n'est pas active" });
@@ -96,7 +100,7 @@ router.post("/", verifyAuth, async (req, res) => {
       });
     }
     idBoutique = boutique.id;
-  } else if (!estAdmin(req)) {
+  } else if (!equipeAdmin(req)) {
     return res.status(403).json({ error: "Choisissez votre boutique pour publier une nouveauté" });
   }
 
