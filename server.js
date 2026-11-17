@@ -31,6 +31,8 @@ import recuperationBoutiqueRoutes from "./routes/recuperation-boutique.js";
 import livraisonsRoutes from "./routes/livraisons.js";
 import soldesRoutes from "./routes/soldes.js";
 import sousCategoriesRoutes from "./routes/sous-categories.js";
+import { demarrerNettoyage } from "./lib/nettoyage.js";
+import guideRoutes from "./routes/guide.js";
 import adminClassementRoutes from "./routes/admin-classement.js";
 
 dotenv.config();
@@ -70,6 +72,8 @@ app.use("/api/presences", presencesRoutes);
 app.use("/api/recuperation-boutique", recuperationBoutiqueRoutes);
 app.use("/api/livraisons", livraisonsRoutes);
 app.use("/api/soldes", soldesRoutes);
+app.use("/api/guide", guideRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Serveur TonaBk lancé sur le port ${PORT}`));
+demarrerNettoyage();
