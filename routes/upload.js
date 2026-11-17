@@ -194,7 +194,7 @@ router.post("/photo-nouveaute", verifyAuth, (req, res, next) => {
     const extension = EXTENSIONS_PHOTO[req.file.mimetype];
     if (!extension) return res.status(400).json({ error: "Format de photo non pris en charge" });
 
-    if (!estAdmin(req)) {
+    if (!estAdmin(req) && !estAdminSecondaire(req)) {
       const { data: boutiques } = await supabaseAdmin
         .from("boutiques").select("id").eq("owner_id", req.user.id).limit(1);
       if (!boutiques?.length) return res.status(403).json({ error: "Une boutique est nécessaire pour publier une nouveauté" });
