@@ -130,4 +130,43 @@ router.get("/kisakoshi/:id", async (req, res) => {
   }));
 });
 
+// Lien d'un rayon (type de produits, ex. « Chemises ») : WhatsApp affiche une photo + le nom du rayon,
+// puis le visiteur arrive directement sur la liste des articles de ce rayon.
+router.get("/type/:id", async (req, res) => {
+  const siteUrl = process.env.FRONTEND_URL || "https://tonabk.com";
+
+  const { data: n } = await supabaseAdmin
+    .from("sous_categories")
+    .select("id, categorie_id, parent_id, nom")
+    .eq("id", req.params.id)
+    .maybeSingle();
+  if (!n) return res.redirect(siteUrl);
+
+  const params = new URLSearchParams({ cat: String(n.categorie_id) });
+  if (n.parent_id) { params.set("sc", String(n.parent_id)); params.set("t", String(n.id)); }
+  else params.set("sc", String(n.id));
+  const urlReelle = `${siteUrl}/?${params.toString()}`;
+
+  // Le rayon et ses sous-rayons éventuels
+  const { data: enfants } = await supabaseAdmin.from("sous_categories").select("id").eq("parent_id", n.id);
+  const ids = [n.id, ...(enfants || []).map((e) => e.id)];
+
+  const { data: premier } = await supabaseAdmin
+    .from("produits")
+    .select("photo_url")
+    .in("sous_categorie_id", ids)
+    .not("photo_url", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const { count } = await supabaseAdmin
+    .from("produits").select("id", { count: "exact", head: true }).in("sous_categorie_id", ids);
+
+  res.send(pageApercu({
+    titre: `${n.nom} — TonaBk`,
+    description: count ? `${count} article${count > 1 ? "s" : ""} à découvrir et à commander sur TonaBk` : "À découvrir sur TonaBk",
+    image: premier?.[0]?.photo_url || `${siteUrl}/icon-512.png`,
+    urlReelle,
+  }));
+});
+
 export default router;
