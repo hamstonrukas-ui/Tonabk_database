@@ -253,6 +253,39 @@ router.post("/audio-solde", verifyAuth, (req, res, next) => {
   }
 });
 
+// Audio du guide de bienvenue (équipe d'administration, 8 Mo max)
+router.post("/audio-guide", verifyAuth, (req, res, next) => {
+  uploadAudio.single("audio")(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.code === "LIMIT_FILE_SIZE" ? "Audio trop lourd (8 Mo maximum)" : "Fichier audio invalide" });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    if (!estAdmin(req) && !estAdminSecondaire(req)) return res.status(403).json({ error: "Réservé à l'admin" });
+    if (!req.file) return res.status(400).json({ error: "Aucun audio reçu" });
+
+    const extension = EXTENSIONS_AUDIO[req.file.mimetype];
+    if (!extension) return res.status(400).json({ error: "Format audio non pris en charge (mp3, m4a, ogg, wav)" });
+
+    const key = `guide/audio/${randomUUID()}.${extension}`;
+    await r2.send(
+      new PutObjectCommand({
+        Bucket: process.env.R2_BUCKET_NAME,
+        Key: key,
+        Body: req.file.buffer,
+        ContentType: req.file.mimetype,
+      })
+    );
+
+    res.json({ url: `${process.env.R2_PUBLIC_URL}/${key}` });
+  } catch (error) {
+    console.error("Erreur upload R2 (audio guide) :", error);
+    res.status(500).json({ error: "Échec de l'upload de l'audio" });
+  }
+});
+
 export default router;
 
 
