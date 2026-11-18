@@ -1,6 +1,7 @@
 import express from "express";
 import { verifyAuth, supabaseAdmin } from "../middleware/verifyAuth.js";
 import { estAdminSecondaire } from "../middleware/roles.js";
+import { supprimerFichiersDe } from "../lib/nettoyage.js";
 
 const router = express.Router();
 
@@ -119,7 +120,7 @@ router.delete("/:id", verifyAuth, async (req, res) => {
   if (!UUID.test(req.params.id)) return res.status(400).json({ error: "Identifiant invalide" });
 
   const { data: n } = await supabaseAdmin
-    .from("nouveautes").select("id, auteur_id, boutique_id").eq("id", req.params.id).maybeSingle();
+    .from("nouveautes").select("id, auteur_id, boutique_id, photo_url, photos").eq("id", req.params.id).maybeSingle();
   if (!n) return res.status(404).json({ error: "Nouveauté introuvable" });
 
   let autorise = estAdmin(req) || n.auteur_id === req.user.id;
@@ -131,6 +132,7 @@ router.delete("/:id", verifyAuth, async (req, res) => {
 
   const { error } = await supabaseAdmin.from("nouveautes").delete().eq("id", n.id);
   if (error) return res.status(500).json({ error: error.message });
+  await supprimerFichiersDe(n);
   res.json({ ok: true });
 });
 
