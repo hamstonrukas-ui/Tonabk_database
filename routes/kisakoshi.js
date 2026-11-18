@@ -1,5 +1,6 @@
 import express from "express";
 import { verifyAuth, supabaseAdmin } from "../middleware/verifyAuth.js";
+import { supprimerFichiersDe } from "../lib/nettoyage.js";
 
 const router = express.Router();
 
@@ -101,7 +102,7 @@ router.post("/", verifyAuth, async (req, res) => {
 router.delete("/:id", verifyAuth, async (req, res) => {
   if (!UUID.test(req.params.id)) return res.status(400).json({ error: "Identifiant invalide" });
   const { data: k } = await supabaseAdmin
-    .from("kisakoshi").select("id, auteur_id, boutique_id").eq("id", req.params.id).maybeSingle();
+    .from("kisakoshi").select("id, auteur_id, boutique_id, photos").eq("id", req.params.id).maybeSingle();
   if (!k) return res.status(404).json({ error: "Kisakoshi introuvable" });
 
   let autorise = estAdmin(req) || k.auteur_id === req.user.id;
@@ -113,6 +114,7 @@ router.delete("/:id", verifyAuth, async (req, res) => {
 
   const { error } = await supabaseAdmin.from("kisakoshi").delete().eq("id", k.id);
   if (error) return res.status(500).json({ error: error.message });
+  await supprimerFichiersDe(k);
   res.json({ ok: true });
 });
 
