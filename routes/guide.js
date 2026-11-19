@@ -6,7 +6,7 @@ import { estAdminSecondaire } from "../middleware/roles.js";
 const router = express.Router();
 const CLE = "guide";
 // "1", "2", "3" = écrans du guide ; les autres = aide de chaque page du site
-const ECRANS = ["1", "2", "3", "accueil", "rayon", "produit", "boutiques", "boutique", "soldes", "mali_mupya", "kisakoshi", "requete", "location", "commandes", "panier"];
+const ECRANS = ["1", "2", "3", "accueil", "rayon", "produit", "boutiques", "boutique", "soldes", "mali_mupya", "kisakoshi", "requete", "location", "commandes", "panier", "expeditions"];
 
 const estAdmin = (req) => req.user.app_metadata?.role === "admin" || req.user.user_metadata?.role === "admin";
 const equipe = (req) => estAdmin(req) || estAdminSecondaire(req);
