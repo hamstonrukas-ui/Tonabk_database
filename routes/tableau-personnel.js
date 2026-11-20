@@ -1,8 +1,9 @@
-// Tableau du personnel (admin principal uniquement) :
+// Tableau du personnel (lecture : toute l'équipe ; saisie des clients : admin principal) :
 //  1. Gestion de l'application : compteurs automatiques (journal activite_personnel)
 //  2. Gestion des clients : saisie manuelle par mois (table suivi_clients)
 import express from "express";
 import { verifyAuth, supabaseAdmin } from "../middleware/verifyAuth.js";
+import { estAdminSecondaire } from "../middleware/roles.js";
 
 const router = express.Router();
 const estAdmin = (req) => req.user.app_metadata?.role === "admin" || req.user.user_metadata?.role === "admin";
@@ -29,8 +30,9 @@ function bornes(mois) {
 const moisLocal = () => new Date(Date.now() + 2 * 3600 * 1000).toISOString().slice(0, 7);
 
 // GET /api/tableau-personnel?mois=2026-11
+// Lecture : admin principal et admins secondaires. Modification : admin principal uniquement.
 router.get("/", verifyAuth, async (req, res) => {
-  if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'administrateur principal" });
+  if (!estAdmin(req) && !estAdminSecondaire(req)) return res.status(403).json({ error: "Réservé à l'équipe d'administration" });
   const mois = MOIS.test(String(req.query.mois || "")) ? req.query.mois : moisLocal();
   try {
     const personnel = await listerPersonnel();
