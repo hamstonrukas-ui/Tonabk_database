@@ -1,6 +1,7 @@
-import express from "express";
+ import express from "express";
 import { verifyAuth, supabaseAdmin } from "../middleware/verifyAuth.js";
 import { supprimerFichiersDe } from "../lib/nettoyage.js";
+import { noterActivite } from "../lib/activite.js";
 
 const router = express.Router();
 
@@ -95,6 +96,7 @@ router.post("/", verifyAuth, async (req, res) => {
     .select(CHAMPS)
     .single();
   if (error) return res.status(500).json({ error: error.message });
+  noterActivite(req, "kisakoshi");
   res.status(201).json(data);
 });
 
