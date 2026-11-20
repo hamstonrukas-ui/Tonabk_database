@@ -2,6 +2,8 @@ import express from "express";
 import { verifyAuth, supabaseAdmin } from "../middleware/verifyAuth.js";
 import { ajouterStock } from "../middleware/stockSolde.js";
 import { estAdminSecondaire } from "../middleware/roles.js";
+import { supprimerFichiersDe } from "../lib/nettoyage.js";
+import { noterActivite } from "../lib/activite.js";
 
 const router = express.Router();
 
@@ -73,6 +75,7 @@ router.post("/", verifyAuth, async (req, res) => {
     .single();
 
   if (error) return res.status(500).json({ error: error.message });
+  noterActivite(req, "solde");
   res.status(201).json(data);
 });
 
@@ -174,8 +177,10 @@ router.post("/:id/reste", verifyAuth, async (req, res) => {
 router.delete("/:id", verifyAuth, async (req, res) => {
   if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
 
+  const { data: ligne } = await supabaseAdmin.from("soldes").select("photo_url, photos, audio_url").eq("id", req.params.id).maybeSingle();
   const { error } = await supabaseAdmin.from("soldes").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
+  if (ligne) await supprimerFichiersDe(ligne); // efface aussi les fichiers dans R2
   res.status(204).send();
 });
 
