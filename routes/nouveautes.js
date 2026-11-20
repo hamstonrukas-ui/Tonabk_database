@@ -75,7 +75,10 @@ router.post("/", verifyAuth, async (req, res) => {
   const prefixe = `${process.env.R2_PUBLIC_URL}/nouveautes/`;
   if (photos.length === 0) return res.status(400).json({ error: "Une photo est requise" });
   if (photos.length > MAX_PHOTOS) return res.status(400).json({ error: `${MAX_PHOTOS} photos maximum par nouveauté` });
-  if (!photos.every((u) => typeof u === "string" && u.startsWith(prefixe))) {
+  // L'équipe peut aussi reprendre les photos d'un article de la boutique choisie (dossier boutiques/<id>/)
+  const prefixeBoutique = boutique_id && UUID.test(String(boutique_id)) && equipeAdmin(req)
+    ? `${process.env.R2_PUBLIC_URL}/boutiques/${boutique_id}/` : null;
+  if (!photos.every((u) => typeof u === "string" && !u.includes("..") && (u.startsWith(prefixe) || (prefixeBoutique && u.startsWith(prefixeBoutique))))) {
     return res.status(400).json({ error: "Photo invalide" });
   }
   const legende = typeof texte === "string" ? texte.trim().slice(0, 200) : "";
