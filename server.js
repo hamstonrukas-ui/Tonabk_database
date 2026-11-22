@@ -31,6 +31,7 @@ import recuperationBoutiqueRoutes from "./routes/recuperation-boutique.js";
 import livraisonsRoutes from "./routes/livraisons.js";
 import colisRoutes from "./routes/colis.js";
 import tableauPersonnelRoutes from "./routes/tableau-personnel.js";
+import sensibilisationRoutes from "./routes/sensibilisation.js";
 import soldesRoutes from "./routes/soldes.js";
 import sousCategoriesRoutes from "./routes/sous-categories.js";
 import { demarrerNettoyage } from "./lib/nettoyage.js";
@@ -77,6 +78,7 @@ app.use("/api/soldes", soldesRoutes);
 app.use("/api/guide", guideRoutes);
 app.use("/api/colis", colisRoutes);
 app.use("/api/tableau-personnel", tableauPersonnelRoutes);
+app.use("/api/sensibilisation", sensibilisationRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Serveur TonaBk lancé sur le port ${PORT}`));
