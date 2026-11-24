@@ -4,18 +4,13 @@
 import express from "express";
 import { verifyAuth, supabaseAdmin } from "../middleware/verifyAuth.js";
 import { estAdminSecondaire } from "../middleware/roles.js";
+import { RESERVES } from "../lib/codeAgent.js";
 
 const router = express.Router();
 const estAdmin = (req) => req.user.app_metadata?.role === "admin" || req.user.user_metadata?.role === "admin";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CODE = /^[a-z0-9]{3,20}$/;
 const TYPES = ["visite", "installation", "whatsapp", "livraison", "colis"];
-const RESERVES = new Set([
-  "boutique", "boutiques", "connexion", "inscription", "expeditions", "soldes", "nouveautes", "kisakoshi", "location",
-  "requete", "requetes", "mes-commandes", "commandes", "a-propos", "apropos", "comment-ca-marche", "confidentialite",
-  "admin", "api", "partage", "livraison", "panier", "recherche", "populaires", "assets", "static", "login", "app", "www",
-  "tonabk", "tona2go", "mali", "mupya", "malimupya",
-]);
 
 // Cache court des codes valides (évite une requête par visite)
 let cache = { le: 0, codes: new Set() };
