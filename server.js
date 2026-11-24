@@ -1,4 +1,5 @@
-  import express from "express";
+    import express from "express";
+import compression from "compression";
 import cors from "cors";
 import dotenv from "dotenv";
 import uploadRoutes from "./routes/upload.js";
@@ -42,6 +43,7 @@ dotenv.config();
 const app = express();
 
 app.use(cors());
+app.use(compression()); // réponses JSON compressées : 70 à 80 % de données en moins sur les listes
 app.use(express.json());
 
 app.use("/api/upload", uploadRoutes);
