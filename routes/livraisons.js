@@ -145,6 +145,69 @@ router.get("/", verifyAuth, async (req, res) => {
   res.json(data);
 });
 
+// Début d'un identifiant (uuid) -> plage complète, pour retrouver une commande à partir de sa référence
+function plageUuid(ref) {
+  const mettreEnForme = (h) => `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+  return [mettreEnForme(ref.padEnd(32, "0")), mettreEnForme(ref.padEnd(32, "f"))];
+}
+
+// Admin : retrouver une commande « Livre-moi » avec la référence du message WhatsApp
+// (les 8 premiers caractères de l'identifiant). Marche aussi pour les brouillons.
+router.get("/ref/:ref", verifyAuth, async (req, res) => {
+  if (!estAdmin(req)) return res.status(403).json({ error: "Réservé à l'admin" });
+
+  const saisie = String(req.params.ref || "").trim().split(/\s+/).pop();
+  const ref = saisie.toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 32);
+  if (ref.length < 6) return res.status(400).json({ error: "Tapez au moins 6 caractères de la référence" });
+
+  const [debut, fin] = plageUuid(ref);
+  const { data: lignes, error } = await supabaseAdmin
+    .from("livraisons")
+    .select("id, created_at, statut, nom_produit, prix, devise, produit_id, solde_id, boutique_id, client_nom, client_telephone, client_adresse")
+    .gte("id", debut)
+    .lte("id", fin)
+    .order("created_at", { ascending: false })
+    .limit(5);
+  if (error) return res.status(500).json({ error: error.message });
+
+  const siteUrl = process.env.FRONTEND_URL || "https://tonabk.com";
+  const resultats = [];
+  for (const l of lignes || []) {
+    let photo = null;
+    let lien = null;
+    let boutique = null;
+    if (l.produit_id) {
+      const { data: p } = await supabaseAdmin.from("produits").select("photo_url, boutiques(nom)").eq("id", l.produit_id).maybeSingle();
+      photo = p?.photo_url || null;
+      boutique = p?.boutiques?.nom || null;
+      lien = `${siteUrl}/boutique/produit/${l.produit_id}`;
+    } else if (l.solde_id) {
+      const { data: s } = await supabaseAdmin.from("soldes").select("photos, photo_url").eq("id", l.solde_id).maybeSingle();
+      photo = s?.photos?.[0] || s?.photo_url || null;
+      lien = `${siteUrl}/soldes/${l.solde_id}`;
+    }
+    if (!boutique && l.boutique_id) {
+      const { data: b } = await supabaseAdmin.from("boutiques").select("nom").eq("id", l.boutique_id).maybeSingle();
+      boutique = b?.nom || null;
+    }
+    resultats.push({
+      reference: l.id.slice(0, 8),
+      date: l.created_at,
+      statut: l.statut,
+      nom_produit: l.nom_produit,
+      prix: l.prix,
+      devise: l.devise,
+      boutique,
+      photo,
+      lien,
+      client_nom: l.client_nom || "",
+      client_telephone: l.client_telephone || "",
+      client_adresse: l.client_adresse || "",
+    });
+  }
+  res.json(resultats);
+});
+
 // Suivi public d'une livraison (le lien contient l'identifiant, impossible à deviner)
 router.get("/:id", async (req, res) => {
   const { data, error } = await supabaseAdmin
