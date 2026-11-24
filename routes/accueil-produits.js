@@ -1,4 +1,4 @@
-import express from "express";
+ import express from "express";
 import { supabaseAdmin } from "../middleware/verifyAuth.js";
 
 const router = express.Router();
@@ -32,6 +32,11 @@ async function toutLire(construireRequete) {
   }
   return tout;
 }
+
+// Cache de l'ordre des produits (identifiants seulement) : 60 s par combinaison de filtres.
+// Évite de relire toute la table à chaque page et à chaque visiteur (plus rapide, moins de données Supabase).
+const cacheOrdre = new Map();
+const DUREE_CACHE_MS = 60 * 1000;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -68,30 +73,39 @@ router.get("/", async (req, res) => {
     };
 
     // 1) On ne récupère que les identifiants (léger), pour décider de l'ordre complet
-    const sponsorises = await toutLire(() =>
-      filtrer(
-        supabaseAdmin
-          .from("produits")
-          .select("id, boutiques!inner(ville, categorie_id)")
-          .eq("sponsorise", true)
-          .gt("sponsorise_jusqua", maintenant)
-          .order("id")
-      )
-    );
-
-    const normaux = await toutLire(() =>
-      filtrer(
-        supabaseAdmin
-          .from("produits")
-          .select("id, boutiques!inner(ville, categorie_id)")
-          .or(`sponsorise.eq.false,sponsorise.is.null,sponsorise_jusqua.lt.${maintenant}`)
-          .order("id")
-      )
-    );
-
     const seed = seedDuJour();
-    const normauxMelanges = [...normaux].sort((a, b) => hash(a.id + seed) - hash(b.id + seed));
-    const ordre = [...sponsorises, ...normauxMelanges].map((p) => p.id);
+    const cle = JSON.stringify([ville || "", categorie_id || "", sous_categorie_id || "", seed]);
+    const enCache = cacheOrdre.get(cle);
+    let ordre;
+    if (enCache && Date.now() - enCache.le < DUREE_CACHE_MS) {
+      ordre = enCache.ids;
+    } else {
+      const sponsorises = await toutLire(() =>
+        filtrer(
+          supabaseAdmin
+            .from("produits")
+            .select("id, boutiques!inner(ville, categorie_id)")
+            .eq("sponsorise", true)
+            .gt("sponsorise_jusqua", maintenant)
+            .order("id")
+        )
+      );
+
+      const normaux = await toutLire(() =>
+        filtrer(
+          supabaseAdmin
+            .from("produits")
+            .select("id, boutiques!inner(ville, categorie_id)")
+            .or(`sponsorise.eq.false,sponsorise.is.null,sponsorise_jusqua.lt.${maintenant}`)
+            .order("id")
+        )
+      );
+
+      const normauxMelanges = [...normaux].sort((a, b) => hash(a.id + seed) - hash(b.id + seed));
+      ordre = [...sponsorises, ...normauxMelanges].map((p) => p.id);
+      if (cacheOrdre.size > 200) cacheOrdre.clear();
+      cacheOrdre.set(cle, { le: Date.now(), ids: ordre });
+    }
 
     const total = ordre.length;
     const offset = (page - 1) * limit;
