@@ -38,6 +38,14 @@ function photosAnnonce(req) {
   return req.body.photos.filter((u) => typeof u === "string" && u.startsWith(prefixe)).slice(0, 10);
 }
 
+// Les nouvelles photos de produit ont une miniature rangée à côté : <id>.webp -> <id>_t.webp.
+// On l'utilise quand le frontend n'envoie pas de miniature différente de la photo.
+function miniatureDe(photoUrl, miniatureUrl) {
+  if (miniatureUrl && miniatureUrl !== photoUrl) return miniatureUrl;
+  if (typeof photoUrl === "string" && /\/produits\/[0-9a-f-]{36}\.webp$/i.test(photoUrl)) return photoUrl.replace(/\.webp$/i, "_t.webp");
+  return miniatureUrl;
+}
+
 // Ajouter un produit
 router.post("/", verifyAuth, async (req, res) => {
   const { boutique_id, nom, prix, devise, stock, description, photo_url, photo_thumb_url, prix_gros, quantite_min_gros, sous_categorie_id } = req.body;
@@ -50,7 +58,7 @@ router.post("/", verifyAuth, async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from("produits")
     .insert({
-      boutique_id, nom, prix, devise: devise || "USD", stock, description, photo_url, photo_thumb_url,
+      boutique_id, nom, prix, devise: devise || "USD", stock, description, photo_url, photo_thumb_url: miniatureDe(photo_url, photo_thumb_url),
       ...(photos && photos.length ? { photos, photo_url: photos[0], photo_thumb_url: photos[0] } : {}),
       prix_gros: prix_gros || null,
       quantite_min_gros: prix_gros ? quantite_min_gros || null : null,
@@ -158,7 +166,8 @@ router.put("/:id", verifyAuth, async (req, res) => {
     quantite_min_gros: prix_gros ? quantite_min_gros || null : null,
   };
   if (photo_url) miseAJour.photo_url = photo_url;
-  if (photo_thumb_url) miseAJour.photo_thumb_url = photo_thumb_url;
+  const miniature = miniatureDe(photo_url, photo_thumb_url);
+  if (miniature) miseAJour.photo_thumb_url = miniature;
   const photos = photosAnnonce(req);
   if (photos && photos.length) {
     miseAJour.photos = photos;
