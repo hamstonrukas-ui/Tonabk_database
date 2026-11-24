@@ -155,13 +155,13 @@ router.get("/resume-semaine", verifyAuth, async (req, res) => {
     const lignes = personnel.map((u) => ({
       id: u.id, nom: u.user_metadata?.nom || u.email || "Employé",
       app: { solde: 0, mali_mupya: 0, kisakoshi: 0, article: 0 },
-      sensibilisation: { declarees: 0, visiteurs: 0, installations: 0, whatsapp: 0, livraisons: 0, colis: 0 },
+      sensibilisation: { code: null, declarees: 0, visiteurs: 0, installations: 0, whatsapp: 0, livraisons: 0, colis: 0 },
       clients: { clients_acquis: 0, conquete_secteur: 0, relance: 0, commandes_confirmees: 0, ventes_realisees: 0, chiffre_affaires: 0 },
     }));
     const parId = Object.fromEntries(lignes.map((l) => [l.id, l]));
     for (const a of activites || []) if (parId[a.personnel_id] && a.type in parId[a.personnel_id].app) parId[a.personnel_id].app[a.type] += a.nombre || 1;
     const parCode = {};
-    for (const a of adresses || []) if (parId[a.personnel_id]) parCode[a.code] = parId[a.personnel_id].sensibilisation;
+    for (const a of adresses || []) if (parId[a.personnel_id]) { parId[a.personnel_id].sensibilisation.code = a.code; parCode[a.code] = parId[a.personnel_id].sensibilisation; }
     const CLE = { visite: "visiteurs", installation: "installations", whatsapp: "whatsapp", livraison: "livraisons", colis: "colis" };
     for (const st of stats || []) if (parCode[st.code] && CLE[st.type]) parCode[st.code][CLE[st.type]] = Number(st.personnes);
     for (const d of declarations || []) if (parId[d.personnel_id]) parId[d.personnel_id].sensibilisation.declarees += d.personnes;
