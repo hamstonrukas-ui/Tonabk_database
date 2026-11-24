@@ -4,6 +4,7 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { randomUUID } from "crypto";
 import { verifyAuth, supabaseAdmin } from "../middleware/verifyAuth.js";
 import { estAdminSecondaire } from "../middleware/roles.js";
+import { optimiserPhoto } from "../lib/optimiserImage.js";
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -22,6 +23,32 @@ const r2 = new S3Client({
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
   },
 });
+
+// Les noms de fichiers contiennent un identifiant unique et ne changent jamais :
+// le navigateur peut donc garder la photo un an (elle ne se retélécharge plus).
+const CACHE_PHOTO = "public, max-age=31536000, immutable";
+
+// Range une photo sur R2, allégée (WebP, 1200 px max) avec, si demandé, une miniature (400 px).
+// `base` = chemin sans extension, ex. "boutiques/<id>/produits/<uuid>". Renvoie { url, thumb_url }.
+// Si l'allègement est impossible, la photo d'origine est gardée comme avant.
+async function enregistrerPhoto(base, fichier, avecMiniature = false) {
+  const publique = process.env.R2_PUBLIC_URL;
+  const envoyer = (Key, Body, ContentType) =>
+    r2.send(new PutObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key, Body, ContentType, CacheControl: CACHE_PHOTO }));
+
+  const opt = await optimiserPhoto(fichier.buffer, fichier.mimetype);
+  if (!opt) {
+    const key = `${base}.${fichier.mimetype === "image/png" ? "png" : fichier.mimetype === "image/webp" ? "webp" : "jpg"}`;
+    await envoyer(key, fichier.buffer, fichier.mimetype);
+    return { url: `${publique}/${key}` };
+  }
+  const key = `${base}.webp`;
+  await envoyer(key, opt.principale, "image/webp");
+  if (!avecMiniature) return { url: `${publique}/${key}` };
+  const keyMini = `${base}_t.webp`;
+  await envoyer(keyMini, opt.miniature, "image/webp");
+  return { url: `${publique}/${key}`, thumb_url: `${publique}/${keyMini}` };
+}
 
 // Upload d'une photo produit, avec vérification de la limite gratuite
 router.post("/photo", verifyAuth, upload.single("photo"), async (req, res) => {
@@ -47,26 +74,14 @@ router.post("/photo", verifyAuth, upload.single("photo"), async (req, res) => {
       });
     }
 
-    const extension = req.file.mimetype === "image/png" ? "png" : "jpg";
-    const key = `boutiques/${boutiqueId}/produits/${randomUUID()}.${extension}`;
-
-    await r2.send(
-      new PutObjectCommand({
-        Bucket: process.env.R2_BUCKET_NAME,
-        Key: key,
-        Body: req.file.buffer,
-        ContentType: req.file.mimetype,
-      })
-    );
-
-    const url = `${process.env.R2_PUBLIC_URL}/${key}`;
+    const { url, thumb_url } = await enregistrerPhoto(`boutiques/${boutiqueId}/produits/${randomUUID()}`, req.file, true);
 
     await supabaseAdmin
       .from("boutiques")
       .update({ photos_utilisees: boutique.photos_utilisees + 1 })
       .eq("id", boutiqueId);
 
-    res.json({ url });
+    res.json({ url, thumb_url });
   } catch (error) {
     console.error("Erreur upload R2 :", error);
     res.status(500).json({ error: "Échec de l'upload de la photo" });
@@ -133,19 +148,7 @@ router.post("/photo-maison", verifyAuth, upload.single("photo"), async (req, res
       return res.status(403).json({ error: "Non autorisé sur cette annonce" });
     }
 
-    const extension = req.file.mimetype === "image/png" ? "png" : "jpg";
-    const key = `maisons/${maisonId}/${randomUUID()}.${extension}`;
-
-    await r2.send(
-      new PutObjectCommand({
-        Bucket: process.env.R2_BUCKET_NAME,
-        Key: key,
-        Body: req.file.buffer,
-        ContentType: req.file.mimetype,
-      })
-    );
-
-    const url = `${process.env.R2_PUBLIC_URL}/${key}`;
+    const { url } = await enregistrerPhoto(`maisons/${maisonId}/${randomUUID()}`, req.file);
     res.json({ url });
   } catch (error) {
     console.error("Erreur upload R2 :", error);
@@ -159,19 +162,8 @@ router.post("/photo-solde", verifyAuth, upload.single("photo"), async (req, res)
     if (!estAdmin(req) && !estAdminSecondaire(req)) return res.status(403).json({ error: "Réservé à l'admin" });
     if (!req.file) return res.status(400).json({ error: "Aucune photo reçue" });
 
-    const extension = req.file.mimetype === "image/png" ? "png" : "jpg";
-    const key = `soldes/${randomUUID()}.${extension}`;
-
-    await r2.send(
-      new PutObjectCommand({
-        Bucket: process.env.R2_BUCKET_NAME,
-        Key: key,
-        Body: req.file.buffer,
-        ContentType: req.file.mimetype,
-      })
-    );
-
-    res.json({ url: `${process.env.R2_PUBLIC_URL}/${key}` });
+    const { url } = await enregistrerPhoto(`soldes/${randomUUID()}`, req.file);
+    res.json({ url });
   } catch (error) {
     console.error("Erreur upload R2 :", error);
     res.status(500).json({ error: "Échec de l'upload de la photo" });
@@ -200,16 +192,8 @@ router.post("/photo-nouveaute", verifyAuth, (req, res, next) => {
       if (!boutiques?.length) return res.status(403).json({ error: "Une boutique est nécessaire pour publier une nouveauté" });
     }
 
-    const key = `nouveautes/${randomUUID()}.${extension}`;
-    await r2.send(
-      new PutObjectCommand({
-        Bucket: process.env.R2_BUCKET_NAME,
-        Key: key,
-        Body: req.file.buffer,
-        ContentType: req.file.mimetype,
-      })
-    );
-    res.json({ url: `${process.env.R2_PUBLIC_URL}/${key}` });
+    const { url } = await enregistrerPhoto(`nouveautes/${randomUUID()}`, req.file);
+    res.json({ url });
   } catch (error) {
     console.error("Erreur upload R2 (nouveauté) :", error);
     res.status(500).json({ error: "Échec de l'upload de la photo" });
